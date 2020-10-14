@@ -1,0 +1,16 @@
+[package]
+name = "messages-actix"
+version = "0.1.0"
+authors = ["Ruben <iruben229@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# serde is the de facto standard way of implementing serialization and deserialization between native Rust types and a variety of formats
+# To enable marshalling to/from JSON, we bring in the serde_json crate
+
+[dependencies]
+actix-web = "1.0"
+env_logger = "0.6"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
