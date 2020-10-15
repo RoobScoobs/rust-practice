@@ -170,6 +170,51 @@
     Both static and const variables must have their types given explicitly,
     so we write the type AtomicUsize for our SERVER_COUNTER variable
 
+    DEFINING THE STATE
+
+    The first part of the state will be set from the atomic usize.
+
+    The second piece of data will keep track of the number of requests seen by the particular worker that owns this instance of state.
+
+    The last piece of state is going to be a vector of strings that represent messages shared across all of the workers.
+
+    We want each worker thread to be able to read and write this state,
+    and we want updates to be shared amongst the workers.
+    
+    INTERIOR MUTATBILITY
+
+    Rust memory safety is based on this rule: Given an object T, it is only possible to have one of the following:
+        - having several immutable references (&T) to the object (also known as aliasing)
+        - having one mutable reference (&mut T) to the object (also known as mutability)
+
+    Sometimes it is required to have multiple references to an object and mutate it.
+
+    Rust has a pattern for mutating a piece of data inside a struct
+    which itself is immutable known as interior mutability.
+
+    Two special types enable this, Cell and RefCell
+
+    Cell --- implements interior mutability by moving values in and out of a shared memory location.
+
+    RefCell --- implements interior mutability by using borrow checking at runtime
+    to enforce the constraint that only one mutable reference can be live at any given time.
+
+    SHARING ACROSS THREADS
+
+    We can ensure mutually exclusive access to the vector of strings by creating a Mutex that wraps our vector.
+
+    Mutex<Vec<String>> is a type that provides an interface for
+    coordinating access to the inner object (Vec<String>) across multiple threads.
+
+    Typically each value in Rust has a single owner,
+    but for this situation we want each thread to be an owner of the data
+    so that the vector lives until the last worker thread exits.
+    The mechanism for this in Rust is to use a reference counted pointer.
+
+    There are two variants: Rc and Arc
+
+    You cannot share an Rc across threads, but you can share an Arc.
+    Otherwise they are equivalent.
 ***/
 
 
@@ -192,7 +237,9 @@ struct AppState {
 
 #[derive(Serialize)]
 struct IndexResponse {
-    message: String,
+    server_id: usize,
+    request_count: usize,
+    messages: Vec<String>,
 }
 
 pub struct MessageApp {
@@ -222,14 +269,27 @@ impl MessageApp {
 }
 
 #[get("/")]
-fn index(req: HttpRequest) -> Result<web::Json<IndexResponse>> {
-    let hello = req
-        .headers()
-        .get("hello")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_else(|| "world");
+fn index(state: web::Data<AppState>) -> Result<web::Json<IndexResponse>> {
+    let request_count = state.request_count.get() + 1;
+    state.request_count.set(request_count);
+    let ms = state.messages.lock().unwrap();
 
     Ok(web::Json(IndexResponse {
-        message: hello.to_owned(),
+        server_id: state.server_id,
+        request_count,
+        messages: ms.clone(),
     }))
 }
+
+// #[get("/")]
+// fn index(req: HttpRequest) -> Result<web::Json<IndexResponse>> {
+//     let hello = req
+//         .headers()
+//         .get("hello")
+//         .and_then(|v| v.to_str().ok())
+//         .unwrap_or_else(|| "world");
+
+//     Ok(web::Json(IndexResponse {
+//         message: hello.to_owned(),
+//     }))
+// }
