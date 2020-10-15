@@ -93,19 +93,83 @@
     result.unwrap().workers(8).run()
 
     ATTRIBUTES
+
     A way of attaching metadata to a variety of things in the language.
     They can be attached to modules as a whole, structs, functions, and several other constructs.
 
     They can attach to the thing they are defined within using the syntax
     #![...] with a ! after the #
 
-    Derive Attribute 
+    Derive Attribute
+
     The derive attribute is probably the most common attribute you will encounter.
     It allows you to implement traits for types without having to do any more work provided the type meets the requirements for the trait to be derived.
     
     It is possible to write custom derive logic so that your own traits can be derivable. Serialize is a custom derivable trait.
 
     Now that we have derived Serialize any instance of our struct can be serialized by serde into the output format of our choice.
+
+    WORKING WITH OPTIONS
+
+    req.headers.get("hello") returns an Option<&HeaderValue>
+        - the HeaderValue is a type that abstracts the bytes that actually the data from the request
+    
+    Option<T> is an enum in the standard library with two variants: Some(T) and None
+
+    After calling .get("hello") we use the function and_then defined on Option to call a function
+    If the header exists, we call our closure with the value, otherwise and_then is a no-op on None
+
+    Our closure has to return an Option so that the type in both scenarios matches up.
+    
+    We call to_str on the &HeaderValue which gives us Result<&str, ToStrError> 
+    where ToStrError is a specific error that explains why the conversion to a &str failed.
+
+    We still haven't returned an Option, however Result has a handy function called ok
+    which takes data from the Ok variant of a Result
+    and puts it inside the Some variant of an Option.
+    
+    Otherwise it turns the Err variant of the Result into the None variant of Option and discards the error
+
+    Finally, we want our hello variable to just contain a &str, but we have an Option<&str>.
+
+    We can use a helper defined on Option called unwrap_or_else
+    which will unwrap and return data inside the Some variant of the Option if it is set
+    otherwise in the case of the None variant, this function will call the provided function and return the result.
+
+    RETURNING THE VALUE OF THE HELLO HEADER
+
+    The type of message is String (from our IndexResponse struct) and the type of the hello variable is &str (borrowed string slice).
+    So we need to convert our borrowed string into an owned string so that we can return the data as a response.
+
+    Find that all of to_owned(), to_string(), and into() would work to do this conversion
+
+    ACTIX WORKERS
+
+    Actix by default will create a number of workers to enable handling concurrent requests. 
+    One piece of state we are going to maintain is a unique usize for each worker.
+
+    Each worker thread gets its own instance of the AppState state struct which we created.
+    Actix takes an application factory because it will create many instances of the application, and
+    therefore many instances of the state struct.
+
+    STATIC VS CONST
+    
+    Both live for the entire lifetime of the program
+
+    Items marked with const are effectively inlined at each site they are used.
+    Therefore references to the same constant do not necessarily point to the same memory address.
+
+    On the other hand, static items are not inlined,
+    they have a fixed address as there is only one instance for each value.
+    Hence static must be used for a shared global variable.
+
+    It is possible to have static mut variables,
+    but mutable global variables are bad and
+    therefore in order to read/write mutable statics requires the use of the unsafe keyword.
+
+    Both static and const variables must have their types given explicitly,
+    so we write the type AtomicUsize for our SERVER_COUNTER variable
+
 ***/
 
 
@@ -114,6 +178,17 @@ extern crate actix_web;
 
 use actix_web::{middleware, web, App, HttpRequest, HttpServer, Result};
 use serde:: Serialize;
+use std::cell::Cell;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+
+static SERVER_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+struct AppState {
+    server_id: usize,
+    request_count: Cell<usize>,
+    messages: Arc<Mutex<Vec<String>>>,
+}
 
 #[derive(Serialize)]
 struct IndexResponse {
