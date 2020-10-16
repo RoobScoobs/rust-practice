@@ -271,6 +271,30 @@
     This is what makes the web::Data<AppState> extractor work.
     
     CONSTRUCTING OUR STATE
+    
+    The strongest ordering is SeqCst which stands for sequentially consistent and
+    it's one of the options of how atomic operations synchronize memory across threads.
+
+    The best advice is to use SeqCst until you profile your code, 
+    find out that this is a hot spot, and
+    then can prove that you are able to use one of the weaker orderings based on your access pattern.
+
+    Each thread will own its own Cell
+    so we just construct the cell inside the application factory closure
+    which is executed by the worker thread and
+    therefore has affinity to that thread which is what we desire.
+
+    Finally, we clone the Arc value that wraps the shared messages value
+    which means that we create a new pointer to the shared data.
+
+    RECEIVING INPUT
+
+    Import Deserialize item from serde so that we can derive the ability to construct structs
+    from JSON data
+
+    Our input will just be of the form {"message": "some data"}.
+    We will then be able to use Serde to turn JSON data with that format into instances of our struct.
+
 ***/
 
 
@@ -278,7 +302,7 @@
 extern crate actix_web;
 
 use actix_web::{middleware, web, App, HttpRequest, HttpServer, Result};
-use serde:: Serialize;
+use serde:: {Deserialize, Serialize};
 use std::cell::Cell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -300,6 +324,18 @@ struct IndexResponse {
 
 pub struct MessageApp {
     port: u16,
+}
+
+#[derive(Deserialize)]
+struct PostInput {
+    message: String,
+}
+
+#[derive(Serialize)]
+struct PostResponse {
+    server_id: usize,
+    request_count: usize,
+    message: String,
 }
 
 impl MessageApp {
@@ -340,6 +376,20 @@ fn index(state: web::Data<AppState>) -> Result<web::Json<IndexResponse>> {
         server_id: state.server_id,
         request_count,
         messages: ms.clone(),
+    }))
+}
+
+fn post(msg: web::Json<PostInput>, state: web::Data<AppState>) -> Result<web::Json<PostResponse>> {
+    let request_count = state.request_count.get() + 1;
+    state.request_count.set(request_count);
+
+    let mut ms = state.messages.lock().unwrap();
+    ms.push(msg.message.clone());
+
+    Ok(web::Json(PostResponse {
+        server_id: state.server_id,
+        request_count,
+        message: msg.message.clone(),
     }))
 }
 
