@@ -215,6 +215,62 @@
 
     You cannot share an Rc across threads, but you can share an Arc.
     Otherwise they are equivalent.
+
+    EXTRACTING DATA FROM REQUESTS
+
+    Extractors are types that implement the FromRequest trait which allow types to define how they are constructed from a request.
+
+    Any type that implements FromRequest can technically fail to extract said type and
+    thus uses Result in the implementation.
+
+    web::Data<AppState> is just a wrapper around our state that handles the FromRequest implementation.
+    This wrapper implements the Deref trait so that we
+    can treat a value of Data<AppState> effectively as if it was a value of AppState.
+
+    The reason that we cannot mutate request_count directly is that our state variable (in the index function) is an immutable reference
+    
+    EFFECTIVELY WORKING WITH LOCKS
+
+    Arc implements Deref so that when we call a method on state.messages
+    it will automatically get called on the value of type Mutex<Vec<String>>.
+    To get access to the data inside the mutex we call the lock method on the mutex.
+
+    The lock method blocks until the underlying operating system mutex is not held by another thread.
+    This method --- lock() --- returns a Result wrapped around a MutexGuard which is wrapped around our data.
+
+    We choose to use the unwrap method on Result which pulls data out of the Ok variant, but instead panics on the Err variant.
+    Often you will see lock().unwrap() used with mutexes
+
+    The type of the variable we get from state.messages.lock().unwrap() is actually a MutexGuard<Vec<String>>
+
+    HOW MUTEXES WORK IN RUST
+
+    RAII (Resource Acquisitions Is Initialization) is a pattern for managing resources which is central to Rust.
+    In particular, when a value goes out of scope, a special method called drop is called by the compiler
+    if the type of the value implements the Drop trait
+
+    For a MutexGuard, the mutex is locked when the guard is constructed
+    and the lock is unlocked in the guard’s drop method.
+
+    The data is only accessible while the lock is locked.
+
+    RESPONDING WITH DATA
+
+    Finally, we construct an instance of our response struct to be serialized and returned as JSON.
+
+    The clone method (called on the variable ms) creates an explicit copy of a value if the type implements the Clone trait.
+    We cannot just pass the messages vector directly because that would move ownership and that is not what we want to do.
+
+    We create the shared messages vector outside of the application factory closure with the line: 
+    let messages = Arc::new(Mutex::new(vec![]));
+
+    We do this so that each worker can actually share the same messages array 
+    rather than each of them creating their own vector which would be unconnected from the other workers.
+
+    To add state to the application we use the data method on App and pass in the initial value of our state.
+    This is what makes the web::Data<AppState> extractor work.
+    
+    CONSTRUCTING OUR STATE
 ***/
 
 
@@ -256,9 +312,15 @@ impl MessageApp {
     }
 
     pub fn run(&self) -> std::io::Result<()> {
+        let messages = Arc::new(Mutex::new(vec![]));
         println!("Starting http server: 127.0.0.1:{}", self.port);
         HttpServer::new(move || {
             App::new()
+                .data(AppState {
+                    server_id: SERVER_COUNTER.fetch_add(1, Ordering::SeqCst),
+                    request_count: Cell::new(0),
+                    messages: messages.clone(),
+                })
                 .wrap(middleware::Logger::default())
                 .service(index)
         })
