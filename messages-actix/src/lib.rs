@@ -295,6 +295,29 @@
     Our input will just be of the form {"message": "some data"}.
     We will then be able to use Serde to turn JSON data with that format into instances of our struct.
 
+    Note that we declare our message vector variable ms to be mutable so that we can call push
+    which is safe because as we are holding the mutex we have exclusive read/write access to the vector.
+
+    We have to clone the message as we push it into the vector
+    because this vector owns each element and
+    we only have a borrowed reference to our PostInput data.
+
+    DEFINING THE ROUTE TO OUR POST HANDLER
+
+    The service method takes a resource definition.
+
+    First we create a resource for the specific path /send with web::resource("/send").
+
+    The data method is used for specifying route specific data or for configuring route specific extractors.
+        - here we're setting a limit on the number of bytes to deserialize to 4096 bytes
+
+    We then declare the route configuration for this resource by passing route data to the route method
+        - use web::post() to say that this route requires a POST request
+
+    Finally, to is called with our handler function post to indicate which function to call for this route.
+
+    The clear handler is similar to our index request but instead of pushing a new message onto our vector 
+    we mutate it by calling clear() to remove all messages
 ***/
 
 
@@ -359,6 +382,12 @@ impl MessageApp {
                 })
                 .wrap(middleware::Logger::default())
                 .service(index)
+                .service(
+                    web::resource("/send")
+                        .data(web::JsonConfig::default().limit(4096))
+                        .route(web::post().to(post))
+                )
+                .service(clear)
         })
         .bind(("127.0.0.1", self.port))?
         .workers(8)
@@ -376,6 +405,21 @@ fn index(state: web::Data<AppState>) -> Result<web::Json<IndexResponse>> {
         server_id: state.server_id,
         request_count,
         messages: ms.clone(),
+    }))
+}
+
+#[post("/clear")]
+fn clear(state: web::Data<AppState>) -> Result<web::Json<IndexResponse>> {
+    let request_count = state.request_count.get() + 1;
+    state.request_count.set(request_count);
+
+    let mut ms = state.messages.lock().unwrap();
+    ms.clear();
+
+    Ok(web::Json(IndexResponse {
+        server_id: state.server_id,
+        request_count,
+        messages: vec![],
     }))
 }
 
