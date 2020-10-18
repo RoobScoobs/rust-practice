@@ -318,13 +318,69 @@
 
     The clear handler is similar to our index request but instead of pushing a new message onto our vector 
     we mutate it by calling clear() to remove all messages
+
+    CUSTOM ERROR HANDLING
+
+    The type for the error handler is defined by the JsonConfig type
+    and is not as flexible as the other handlers that we can define.
+
+    We cannot use extractors to get different input, and
+    we have to return the Error type from actix_web.
+
+
+    GENERIC RETURN TYPES
+
+    Actix uses a type safe bag of additional data attached to requests called extensions.
+
+    The state is just the value inside of the extensions with type web::Data<AppState>
+
+    The extensions have a generic function called get which has the signature:
+        fn get<T>(&self) -> Option<&T
+
+    This function returns a reference to a type that was previously stored as an extension.
+    It is up to the caller (i.e. us) to say what type we want to get back.
+
+    Have to give the compiler some help by putting a type annotation somewhere so that get knows what type we want.
+
+    By using the ::<> turbofish syntax, namely
+        get::<web::Data<AppState>>
+    we can annotate the type on the get method, and
+    so this means call get<T>() with T bound to the type web::Data<AppState>
+
+    We call unwrap on the Option we get back to get direct access to our state.
+
+    CREATING USERFUL ERRORS
+
+    The format macro takes a format string along with the necessary variables to fill in the placeholders
+    and returns an owned String.
+
+    In a real app, you would probably want a more user friendly message than even just displaying this error.
+    One approach would be to match on the different variants of the JsonPayloadError enum
+    and make our own message in the different scenarios.
+
+    InternalError is a helper provided by actix to wrap any error and turn it into a custom response.
+
+    So we call the constructor from_response, passing in the JsonPayloadError
+    which gets stored as the cause of the error, and
+    then the second argument is the custom response we want to return.
+
+    The HttpResponse struct has a variety of helpers for building responses,
+    one of which is BadRequest which sets the status code to 400.
+
+    BadRequest has a method that returns a response builder
+    which has a json method that can take anything that is serializable into JSON
+    and sets it as the response body.
+
 ***/
 
 
 #[macro_use]
 extern crate actix_web;
 
-use actix_web::{middleware, web, App, HttpRequest, HttpServer, Result};
+use actix_web::{
+    error::{Error, InternalError, JsonPayloadError},
+    middleware, web, App, HttpResponse, HttpRequest, HttpServer, Result,
+};
 use serde:: {Deserialize, Serialize};
 use std::cell::Cell;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -359,6 +415,13 @@ struct PostResponse {
     server_id: usize,
     request_count: usize,
     message: String,
+}
+
+#[derive(Serialize)]
+struct PostError {
+    server_id: usize,
+    request_count: usize,
+    error: String,
 }
 
 impl MessageApp {
@@ -435,6 +498,20 @@ fn post(msg: web::Json<PostInput>, state: web::Data<AppState>) -> Result<web::Js
         request_count,
         message: msg.message.clone(),
     }))
+}
+
+fn post_error(err: JsonPayloadError, req: &HttpRequest) -> Error {
+    let extns = req.extensions();
+    let state = extns.get::<web::Data<AppState>>().unwrap();
+    let request_count = state.request_count.get() + 1;
+    state.request_count.set(request_count);
+    let post_error = PostError {
+        server_id: state.server_id,
+        request_count,
+        error: format!("{}", err),
+    };
+    
+    InternalError::from_response(err, HttpResponse::BadRequest().json(post_error)).into()
 }
 
 // #[get("/")]
