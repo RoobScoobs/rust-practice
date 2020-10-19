@@ -314,7 +314,7 @@
     We then declare the route configuration for this resource by passing route data to the route method
         - use web::post() to say that this route requires a POST request
 
-    Finally, to is called with our handler function post to indicate which function to call for this route.
+    Finally, to() is called with our handler function post to indicate which function to call for this route.
 
     The clear handler is similar to our index request but instead of pushing a new message onto our vector 
     we mutate it by calling clear() to remove all messages
@@ -327,7 +327,6 @@
     We cannot use extractors to get different input, and
     we have to return the Error type from actix_web.
 
-
     GENERIC RETURN TYPES
 
     Actix uses a type safe bag of additional data attached to requests called extensions.
@@ -335,7 +334,7 @@
     The state is just the value inside of the extensions with type web::Data<AppState>
 
     The extensions have a generic function called get which has the signature:
-        fn get<T>(&self) -> Option<&T
+        fn get<T>(&self) -> Option<&T>
 
     This function returns a reference to a type that was previously stored as an extension.
     It is up to the caller (i.e. us) to say what type we want to get back.
@@ -371,6 +370,26 @@
     which has a json method that can take anything that is serializable into JSON
     and sets it as the response body.
 
+    TRANSFORMATIONS BETWEEN TYPES
+
+    Rust has a pair of traits std::convert::From and std::convert::Into
+    which define explicit transformations between types.
+
+    in this case, actix_web::Error implements From<T> for any T
+    which implements the ResponseError trait.
+    As InternalError implements the ReponseError trait,
+    we can explicitly say that we want to convert our InternalError into an Error
+    and let the From implementation of Error take care of what that means.
+
+    SPECIFYING DESIRED LOG FORMAT
+
+    We are using a raw string because we want to include quotation marks inside our string without having to escape them.
+
+    The syntax is the character r followed by zero or more # characters followed by an opening " character.
+
+    To terminate the string you use a closing " character followed by the same number of # characters you used at the beginning.
+
+
 ***/
 
 
@@ -387,6 +406,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 static SERVER_COUNTER: AtomicUsize = AtomicUsize::new(0);
+const LOG_FORMAT: &'static str = r#""%r" %s %b "%{User-Agent}i" %D"#;
 
 struct AppState {
     server_id: usize,
@@ -443,12 +463,16 @@ impl MessageApp {
                     request_count: Cell::new(0),
                     messages: messages.clone(),
                 })
-                .wrap(middleware::Logger::default())
+                .wrap(middleware::Logger::new(LOG_FORMAT))
                 .service(index)
                 .service(
                     web::resource("/send")
-                        .data(web::JsonConfig::default().limit(4096))
-                        .route(web::post().to(post))
+                        .data(
+                            web::JsonConfig::default()
+                                .limit(4096)
+                                .error_handler(post_error),
+                        )
+                        .route(web::post().to(post)),
                 )
                 .service(clear)
         })
