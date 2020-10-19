@@ -389,7 +389,40 @@
 
     To terminate the string you use a closing " character followed by the same number of # characters you used at the beginning.
 
+    HANDLING VARIABLE PATHS
 
+    We add a GET request to /lookup/{index} 
+    which will attempt to get only the message at that particular index in our list.
+
+    The different part of this struct from our previous responses is the result field
+    which has type Option<String>.
+    We use an Option because the lookup might fail if the index happens to be out of bounds of the current vector of messages
+
+    We use an attribute to define the route for this handler as a GET request to /lookup/{index}
+
+    This syntax says to match the exact path /lookup/ and then expect a variable afterwards
+
+    The web::Path extractor uses the generic type specified,
+    in this case usize, to attempt to deserialize the path segment to this type.
+
+    First we call into_inner on the Path<usize> variable. 
+    This converts the Path wrapper into the inner type it is wrapping,in this case a usize.
+    Then, we use that usize variable as the argument to the get method on our vector.
+
+    The get method on Vec<T> returns Option<&T>.
+    That is it maybe returns a reference to one of the elements inside the vector. 
+    This method does not modify the vector,
+    so it cannot return Option<T> as that would require moving data out of the vector
+    and therefore modifying the vector.
+
+    Our result variable needs to be of type Option<String>,
+    but we have a variable of type Option<&String>. 
+    
+    The Option enum implements a method cloned which 
+    converts Option<&T> to Option<T> by cloning the inner data in the Some case, and
+    doing nothing in the None case.
+
+    
 ***/
 
 
@@ -444,6 +477,13 @@ struct PostError {
     error: String,
 }
 
+#[derive(Serialize)]
+struct LookupResponse {
+    server_id: usize,
+    request_count: usize,
+    result: Option<String>,
+}
+
 impl MessageApp {
     pub fn new(port: u16) -> Self {
         // same as writing:
@@ -475,6 +515,7 @@ impl MessageApp {
                         .route(web::post().to(post)),
                 )
                 .service(clear)
+                .service(lookup)
         })
         .bind(("127.0.0.1", self.port))?
         .workers(8)
@@ -492,6 +533,21 @@ fn index(state: web::Data<AppState>) -> Result<web::Json<IndexResponse>> {
         server_id: state.server_id,
         request_count,
         messages: ms.clone(),
+    }))
+}
+
+#[get("/lookup/{index}")]
+fn lookup(state: web::Data<AppState>, idx: web::Path<usize>) -> Result<web::Json<LookupResponse>> {
+    let request_count = state.request_count.get() + 1;
+    state.request_count.set(request_count);
+    
+    let ms = state.messages.lock().unwrap();
+    let result = ms.get(idx.into_inner()).cloned();
+
+    Ok(web::Json(LookupResponse {
+        server_id: state.server_id,
+        request_count,
+        result,
     }))
 }
 
