@@ -1,0 +1,22 @@
+[package]
+name = "blog-actix"
+version = "0.1.0"
+authors = ["Ruben <iruben229@gmail.com>"]
+edition = "2018"
+
+# Cargo supports the concept of features which allow crates to specify groups of
+# functionality that you can select when you depend on a crate.
+
+# The Rust compiler can do some work to remove code that is unused
+# in your final binary but using features is one way to ensure this happens and make
+# it explicitly what you are using.
+
+[dependencies]
+actix-web = "1.0"
+env_logger = "0.6"
+futures = "0.1"
+serde = "1.0"
+serde_json = "1.0"
+serde_derive = "1.0"
+diesel = { version = "^1.1.0", features = ["sqlite", "r2d2"] }
+dotenv = "0.10"
