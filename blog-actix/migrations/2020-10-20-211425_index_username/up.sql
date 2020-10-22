@@ -1,4 +1,6 @@
 /***
+    diesel migration generate index_username
+
     Do this to ensure that usernames are unique in the system
     and that we can lookup users by their username quickly
 

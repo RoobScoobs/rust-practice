@@ -1,6 +1,6 @@
 /* 
     
-    The table! macro is used
+    Diesel uses to schema.rs to understand the state of the database
 
 */
 
