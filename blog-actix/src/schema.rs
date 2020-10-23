@@ -1,6 +1,6 @@
 /* 
     
-    Diesel uses to schema.rs to understand the state of the database
+    Diesel (which autogenerates this file) uses to schema.rs to understand the state of the database
 
 */
 
