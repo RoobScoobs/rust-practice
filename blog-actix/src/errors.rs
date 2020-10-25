@@ -79,8 +79,6 @@ use diesel::result::{
     DatabaseErrorKind::UniqueViolation,
     Error::{DatabaseError, NotFound}
 };
-// use diesel::result::DatabaseErrorKind::UniqueViolation;
-// use diesel::result::Error::{DatabaseError, NotFound};
 use std::fmt;
 
 #[derive(Debug)]
