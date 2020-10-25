@@ -36,6 +36,40 @@
     The &mut fmt::Formatter argument implements a trait that makes it a “Writer”
     so typically you just use write!(f, ...) and
     fill in the ... with whatever you want to represent your type when it is formatted using {}
+
+    FROM AND INTO
+
+    Rust usually does not implicit convert one type to another,
+    but there is a mechanism for telling Rust how to convert between types which you can opt in to
+
+    You must explicitly implement one of these traits (From or Into) to be able to take advantage of some automatic type conversions
+
+    One place that uses From is the ? operator for early returning the Err variant of a Result.
+    That is if the error that would be returned is type X and
+    the expected return type is Y
+    then you can still use the ? operator if Y implements From<X>
+
+    The AppError type will implement From<X> for a couple different values of X
+    so that the ? operator works without having to explicitly convert errors
+
+    So From<diesel::result::Error> for AppError means that you will be given an instance of diesel::result::Error
+    and are expected to return an instance of AppError
+
+    DATABASE ERRORS
+
+    We convert the DatabaseError(UniqueViolation, _) to our RecordAlreadyExists variant
+    as we will only get unique constraint violations
+    when we try to insert a record that already exists based on what we have defined to be unique.
+
+    Specifically, we have set a unique constraint on username
+    so trying to insert two users with the same username
+    will result in this RecordAlreadyExists error being created
+
+    The second case is when we try to get a record from the database that does not exist.
+    Diesel will return a NotFound error which we just turn into our variant with basically the same name
+
+    Finally, the catch all case in the match statement means Diesel encountered an error other than these two
+    and the only thing we know how to do is call it a DatabaseError
  *
 ***/
 
@@ -57,6 +91,11 @@ pub enum AppError {
     OperationCanceled,
 }
 
+#[derive(Debug, Serialize)]
+struct ErrorResponse {
+    err: String,
+}
+
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -64,6 +103,25 @@ impl fmt::Display for AppError {
             AppError::RecordNotFound => write!(f, "This record does not exist"),
             AppError::DatabaseError(e) => write!(f, "Database error: {:?}", e),
             AppError::OperationCanceled => write!(f, "The running operation was canceled"),
+        }
+    }
+}
+
+impl From<diesel::result::Error> for AppError {
+    fn from(e: diesel::result::Error) -> Self {
+        match e {
+            DatabaseError(UniqueViolation, _) => AppError::RecordAlreadyExists,
+            NotFound => AppError::RecordNotFound,
+            _ => AppError::DatabaseError(e),
+        }
+    }
+}
+
+impl From<BlockingError<AppError>> for AppError {
+    fn from(e: BlockingError<AppError>) -> Self {
+        match e {
+            BlockingError::Error(inner) => inner,
+            BlockingError::Canceled => AppError::OperationCanceled,
         }
     }
 }
