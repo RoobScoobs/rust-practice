@@ -70,6 +70,32 @@
 
     Finally, the catch all case in the match statement means Diesel encountered an error other than these two
     and the only thing we know how to do is call it a DatabaseError
+
+    ERRORS AS RESPONSES
+
+    Main advantage of creating our own error type is that we define how to turn an instance of AppError into an HTTP response
+
+    The struct ErrorResponse will represent a JSON error response.
+
+    Actix web defines a trait ResponseError
+    which allows you to specify how the type inside a Err variant of a Result gets turned into a response
+
+    RESPONSE ERROR TRAIT FROM ACTIX
+
+    The trait (actix_web::ResponseError) is why we implemented Display for our AppError.
+    ResponseError has the trait bound Debug + Display
+    which means that in order to implement ResponseError for your type,
+    your type must also implement Debug and Display.
+
+    The trait requires error_response to be implemented
+    which we do by matching on our error and
+    setting useful response codes to the cases we care about and 500 otherwise,
+    and then using the Display formatting to create an error message to return as JSON.
+
+    The trait also has a method render_response
+    which has a default implementation,
+    but the default overrides the content type and data which is not what we want
+
  *
 ***/
 
@@ -121,5 +147,21 @@ impl From<BlockingError<AppError>> for AppError {
             BlockingError::Error(inner) => inner,
             BlockingError::Canceled => AppError::OperationCanceled,
         }
+    }
+}
+
+impl actix_web::ResponseError for AppError {
+    fn error_response(&self) -> HttpResponse {
+        let err = format!("{}", self);
+        let mut builder = match self {
+            AppError::RecordAlreadyExists => HttpResponse::BadRequest(),
+            AppError::RecordNotFound => HttpResponse::NotFound(),
+            _ => HttpResponse::InternalServerError(),
+        };
+        builder.json(ErrorResponse { err })
+    }
+
+    fn render_response(&self) -> HttpResponse {
+        self.error_response()
     }
 }
