@@ -94,6 +94,41 @@
    
    Furthermore, we can use Into here because we implemented From and Into gets implemented automatically.
 
+   FETCHING A USER
+
+   Two ways to identify a user: by id and by username
+
+   The UserKey enum is either an ID which holds an i32 for looking up by the primary key or
+   a Username which holds a reference to a string
+
+   GENERIC LIFETIME FOR A TYPE
+   
+   Lifetimes of references in Rust are checked by the compiler to ensure
+   that the data referenced outlives the reference to it
+
+   Here our type UserKey<'a> specifies that it has one generic lifetime parameter named 'a
+
+   We need to specify this generic parameter
+   so that we can give a definite lifetime to the string reference inside our Username variant
+
+   In other words, we need to ensure that any reference to a UserKey
+   cannot outlive the reference to the string slice it contains
+
+   Any composite type with a reference inside must declare a lifetime on that reference
+   otherwise there is no way for the compiler to make any guarantees about the liveness of the underlying data
+
+   FUNCTION WHICH GETS THE USER find_user
+
+   We match on our key to decide which query to run.
+   
+   If we have a username,
+   then we do a filter by username equal to the value passed in.
+   
+   If we have an id,
+   then we can use the special find function
+   which attempts to find a single record based on the primary key for that table
+
+
  *
 ***/
 
@@ -109,6 +144,11 @@ pub struct User {
    pub username: String,
 }
 
+pub enum UserKey<'a> {
+   Username(&'a str),
+   ID(i32),
+}
+
 pub fn create_user(conn: &SqliteConnection, username: &str) -> Result<User> {
    conn.transaction(|| {
       diesel::insert_into(users::table)
@@ -121,4 +161,20 @@ pub fn create_user(conn: &SqliteConnection, username: &str) -> Result<User> {
          .first(conn)
          .map_err(Into::into)
    })
+}
+
+pub fn find_user<'a>(conn: &SqliteConnection, key: UserKey<'a>) -> Result<User> {
+   match key {
+      UserKey::Username(name) => users::table
+         .filter(users::username.eq(name))
+         .select((users::id, users::username))
+         .first::<User>(conn)
+         .map_err(AppError::from),
+
+      UserKey::ID(id) => users::table
+         .find(id)
+         .select((users::id, users::username))
+         .first::<User>(conn)
+         .map_err(Into::into),
+   }
 }
