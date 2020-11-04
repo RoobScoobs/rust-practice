@@ -19,7 +19,7 @@
     The module above routes is our root module at src/lib.rs.
     
     We want that module to be able to refer to the users module.
-    However we do not want say our models module to be able to refer to the users module.
+    However we do not want, say our models module, to be able to refer to the users module.
     So we restrict the visibility of the users module to only the module one step up in the hierarchy
 
     GENERIC CONVERT FUNCTION 
