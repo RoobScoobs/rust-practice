@@ -13,6 +13,49 @@
 
     As we derive Deserialize we will be able to accept this type as a JSON post body
 
+    We need the input data as the JSON body of the request
+    and we need a handle to our database pool
+
+    RETURN TYPE FUTURE
+
+    Future<Item, Error> is an object that represents a computation
+    which can be queried for a result or an error
+
+    This is a standard approach to writing asynchronous code
+    where you return immediately some value that represents a computation
+    rather than doing the computation before returning
+
+    Eventually the future resolves to a result or an error when the computation completes
+
+    The syntax impl Future means that we are going to return some type that implements the Future trait
+
+    As Future is a generic trait, we must fix the Item and Error types that are otherwise generic
+    so that the return type is fully specified
+
+    We want to return an HttpResponse in the successful case
+    and our AppError in the other case
+
+    INSIDE THE HANDLER
+
+    We get a connection to the database out of the pool.
+
+    We get the username from the input data. 
+
+    Diesel is synchronous, it does not directly support futures for interacting with the database
+    
+    Therefore we use web::block
+    which executes a blocking function on a thread pool and
+    returns a future that resolves to the result of the function execution
+
+    Finally, we can use our convert function to turn the result of the call to
+    models::create_user into the response we desire
+
+    FIND A USER
+
+    find_user implements the lookup by username
+
+    This will be a GET request so we expect the username to be a string in the path
+
  *
 ***/
 
@@ -34,7 +77,22 @@ fn create_user(
     web::block(move || {
         let conn = &pool.get().unwrap();
         let username = item.into_inner().username;
+
         models::create_user(conn, username.as_str())
+    })
+    .then(convert)
+}
+
+fn find_user(
+    name: web::Path<String>,
+    pool: web::Data<Pool>,
+) -> impl Future<Item = HttpResponse, Error = AppError> {
+    web::block(move || {
+        let conn = &pool.get().unwrap();
+        let name = name.into_inner();
+        let key = models::UserKey::Username(name.as_str());
+
+        models::find_user(conn, key)
     })
     .then(convert)
 }
