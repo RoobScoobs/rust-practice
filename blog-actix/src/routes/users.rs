@@ -56,6 +56,25 @@
 
     This will be a GET request so we expect the username to be a string in the path
 
+    get_user implements the lookup by id
+
+    This is basically the same as find_user except we expect an i32 in the path instead of a string
+    and we create the other variant of the UserKey enum
+
+    CONFIGURING THE ROUTES
+
+    The signature of the configure function is specified by Actix web
+
+    The only parameter is a mutable reference to a service configuration object
+
+    Define 3 routes:
+        - POST /users which calls create_user
+        - GET /users/find/{name} which calls find_user
+        - GET /users/{id} which calls get_user
+
+    We use *to_async* to specify the handlers here 
+    because our handlers return futures
+    rather than *to* that we used before with synchronous handlers
  *
 ***/
 
@@ -95,4 +114,24 @@ fn find_user(
         models::find_user(conn, key)
     })
     .then(convert)
+}
+
+fn get_user(
+    user_id: web::Path<i32>,
+    pool: web::Data<Pool>,
+) -> impl Future<Item = HttpResponse, Error = AppError> {
+    web::block(move || {
+        let conn = &pool.get().unwrap();
+        let id = user_id.into_inner();
+        let key = models::UserKey::ID(id);
+
+        models::find_user(conn, key)
+    })
+    .then(convert)
+}
+
+pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.service(web::resource("/users").route(web::post().to_async(create_user)))
+        .service(web::resource("/users/find/{name}").route(web::get().to_async(find_user)))
+        .service(web::resource("/users/{id}").route(web::get().to_async(get_user)));
 }
