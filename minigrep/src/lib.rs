@@ -1,3 +1,15 @@
+/***
+ * 
+ * 
+    WRITING A FAILING TEST
+
+    The test function specifies the behavior we want the search function to have:
+    it will take a query and the text to search for the query in,
+    and it will return only the lines from the text that contain the query
+
+***/
+
+
 use std::fs;
 use std::error::Error;
 
@@ -24,7 +36,21 @@ impl Config {
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let contents = fs::read_to_string(config.filename)?;
     
-    println!("With text:\n{}", contents);
-
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn one_result() {
+        let query = "duct";
+        let contents = "\
+        Rust:
+        safe, fast, productive.
+        Pick three."
+
+        asser_eq!(vec!["safe, fast, productive."], search(query, contents));
+    }
 }
