@@ -96,6 +96,19 @@
      
      The `if let` construct reads: "if `let` destructures `run(config)` into
      `Err(e)`, evaluate the block (`{}`).
+
+     WRITING ERROR MESSAGE TO STANDARD ERROR
+     
+     Command line programs are expected to send error messages to the standard error stream
+     so we can still see error messages on the screen even
+     if we redirect the standard output stream to a file
+     
+     The way to demonstrate the standard output behavior is by running the program with > and the filename, output.txt,
+     so that it redirects the standard output stream to that particular file
+     
+     The > syntax tells the shell to write the contents of standard output to output.txt instead of the screen
+
+     The standard library provides the eprintln! macro that prints to the standard error stream
 ***/
 
 use std::env;
@@ -106,10 +119,12 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let config = Config::new(&args).unwrap_or_else(|err| {
+        eprintln!("Problem parsing arguments: {}", err);
         process::exit(1);
     });
 
     if let Err(e) = minigrep::run(config) {
+        eprintln!("Application error: {}", e);
         process::exit(1);
     }
 }
