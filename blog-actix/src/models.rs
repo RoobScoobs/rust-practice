@@ -128,12 +128,35 @@
    then we can use the special find function
    which attempts to find a single record based on the primary key for that table
 
+   POST MODEL
+
+   Our database schema is directly translated to Rust types where each field is a column of the appropriate type
+
+   Note that the not null constraints we specified in our migration on each column is why we use types directly
+   rather than wrapping them in Option
+
+   ASSOCIATION
+
+   The concept of an association in Diesel is always from child to parent
+
+   Declaring the association between two records requires the belongs_to attribute on the child
+   and specifies the name of the struct that represents the parent
+
+   The belongs_to attribute accepts a foreign_key argument
+   if the relevant foreign key is different from table_name_id
+   
+   Both the parent and child must implement the Identifiable trait
+
+   In addition to the belongs_to annotation,
+   the struct also needs to derive Associations
+   
+   Deriving this trait uses the information in belongs_to to generate the relevant code to make joins possible
 
  *
 ***/
 
 use crate::errors::AppError;
-use crate::schema::{users};
+use crate::schema::{users, posts};
 use diesel::prelude::*;
 
 type Result<T> = std::result::Result<T, AppError>;
@@ -142,6 +165,16 @@ type Result<T> = std::result::Result<T, AppError>;
 pub struct User {
    pub id: i32,
    pub username: String,
+}
+
+#[derive(Queryable, Associations, Identifiable, Serialize, Debug)]
+#[belongs_to(User)]
+pub struct Post {
+   pub id: i32,
+   pub user_id: i32,
+   pub title: String,
+   pub body: String,
+   pub published: bool,
 }
 
 pub enum UserKey<'a> {

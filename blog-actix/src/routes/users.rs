@@ -75,6 +75,13 @@
     We use *to_async* to specify the handlers here 
     because our handlers return futures
     rather than *to* that we used before with synchronous handlers
+
+    EXAMPLES TO TEST WITH CURL
+
+    curl -H 'Content-Type: application/json' -X POST http://localhost:8998/users -d '{"username":"Ruben"}'
+    curl -H 'Content-Type: application/json' http://localhost:8998/users/find/Ruben
+    curl -H 'Content-Type: application/json' http://localhost:8998/users/1
+
  *
 ***/
 
