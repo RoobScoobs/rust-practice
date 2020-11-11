@@ -176,6 +176,31 @@
    We are only updating a single column so we pass one expression to the set method,
    but if you want to update multiple columns you can pass a tuple to set instead
 
+   RETRIEVING POSTS
+
+   Implementing two different ways of retrieving posts
+      - to get all published posts
+      - to get only those posts written by a particular user
+
+   The all_posts function returns a list of tuples where the first element is a post
+   and the second element is the author
+
+   Diesel is built around queries that have this flat result structure
+
+   We order the posts based on their id as this will make them newest first
+
+   We also select only those posts which have been published
+
+   For each post we want to fetch all of the data about the post as well as data about the author
+   so we use a query (inner_join) involving multiple tables (i.e. the posts and users table)
+
+   Diesel will figure out how to perform the join based on the association attributes we put on the Post model
+
+   The argument to select is a tuple with two elements both of which are tuples representing the columns we want to fetch
+   We then tell load the type to coerce these columns into
+
+   user_posts takes the user_id as input and retrieves a vector of posts or an empty set if the user does not exist
+   
  *
 ***/
 
@@ -271,4 +296,26 @@ pub fn publish_post(conn: &SqliteConnection, post_id: i32) -> Result<Post> {
          .first(conn)
          .map_err(Into::into)
    })
+}
+
+pub fn all_posts(conn: &SqliteConnection) -> Result<Vec<(Post, User)>> {
+   posts::table
+      .order(posts::id.desc())
+      .filter(posts::published.eq(true))
+      .inner_join(users::table)
+      .select((posts::all_columns, (users::id, users::username)))
+      .load::<(Post,User)>(conn)
+      .map_err(Into::into)
+}
+
+pub fn user_posts(
+   conn: &SqliteConnection,
+   user_id: i32
+) -> Result<Vec<Post>> {
+   posts::table
+      .filter(posts::user_id.eq(user_id))
+      .order(posts::id.desc())
+      .select(posts::all_columns)
+      .load::<Post>(conn)
+      .map_err(Into::into)
 }
