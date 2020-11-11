@@ -152,6 +152,30 @@
    
    Deriving this trait uses the information in belongs_to to generate the relevant code to make joins possible
 
+   CREATING A POST
+
+   Code for inserting into the posts table
+   and then fetching the post is very similar to that for a user
+
+   The use of select(posts::all_columns) which is a shorthand that Diesel provides
+   prevents writing out a tuple with each column explicitly listed
+   Depending on the struct you are serializing to you may or may not be able to use this shorthand
+
+   PUBLISH A POST
+
+   The create_post method uses the database default for the published column and
+   therefore in order to set published to true we need to update the database row for a particular post
+
+   Issuing an update to the database uses the aptly named update function from Diesel
+
+   The argument to update can be a table, a filtered table (which is what we use here),
+   or a reference to a struct that implements the Identifiable trait
+
+   If you pass just a table then the update applies to all rows of that table which is typically not what you want
+
+   We are only updating a single column so we pass one expression to the set method,
+   but if you want to update multiple columns you can pass a tuple to set instead
+
  *
 ***/
 
@@ -210,4 +234,41 @@ pub fn find_user<'a>(conn: &SqliteConnection, key: UserKey<'a>) -> Result<User> 
          .first::<User>(conn)
          .map_err(Into::into),
    }
+}
+
+pub fn create_post(
+   conn: &SqliteConnection,
+   user: &User,
+   title: &str,
+   body: &str
+) -> Result<Post> {
+   conn.transaction(|| {
+      diesel::insert_into(posts::table)
+         .values((
+            posts::user_id.eq(user.id),
+            posts::title.eq(title),
+            posts::body.eq(body),
+         ))
+         .execute(conn)?;
+
+      posts::table
+         .order(posts::id.desc())
+         .select(posts::all_columns)
+         .first(conn)
+         .map_err(Into::into)
+   })
+}
+
+pub fn publish_post(conn: &SqliteConnection, post_id: i32) -> Result<Post> {
+   conn.transaction(|| {
+      diesel::update(posts::table.filter(posts::id.eq(post_id)))
+         .set(posts::published.eq(true))
+         .execute(conn)?;
+
+      posts::table
+         .find(post_id)
+         .select(posts::all_columns)
+         .first(conn)
+         .map_err(Into::into)
+   })
 }
