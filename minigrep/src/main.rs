@@ -109,6 +109,16 @@
      The > syntax tells the shell to write the contents of standard output to output.txt instead of the screen
 
      The standard library provides the eprintln! macro that prints to the standard error stream
+
+     ITERATORS
+     
+     Able can change the Config::new function to take ownership of an iterator as its argument instead of borrowing a slice
+
+     The env::args function returns an iterator
+
+     Rather than collecting the iterator values into a vector
+     and then passing a slice to Config::new,
+     now we’re passing ownership of the iterator returned from env::args to Config::new directly
 ***/
 
 use std::env;
@@ -116,9 +126,7 @@ use std::process;
 use minigrep::Config;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    let config = Config::new(&args).unwrap_or_else(|err| {
+    let config = Config::new(env::args()).unwrap_or_else(|err| {
         eprintln!("Problem parsing arguments: {}", err);
         process::exit(1);
     });

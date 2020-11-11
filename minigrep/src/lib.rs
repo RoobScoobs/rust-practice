@@ -44,6 +44,23 @@
 
     If the CASE_INSENSITIVE environment variable is set to anything,
     is_err will return false and the program will perform a case-insensitive search
+
+    ITERATORS
+
+    The standard library documentation for the env::args function shows that the type of the iterator it returns is std::env::Args
+    So it's necessary to update the signature of the Config::new function
+    The parameter args has the type std::env::Args instead of &[String]
+
+    Because we’re taking ownership of args and we’ll be mutating args by iterating over it,
+    we can add the mut keyword
+
+    The standard library documentation also mentions that std::env::Args implements the Iterator trait,
+    so we know we can call the next method on it
+
+    Can refactor search function to use iterator adaptor methods (e.g. filter, map)
+
+    Doing so also lets us avoid having a mutable intermediate results vector
+    The functional programming style prefers to minimize the amount of mutable state to make code clearer
 ***/
 
 
@@ -58,12 +75,18 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() < 3 {
-            return Err("not enough arguments");
-        }
-        let query = args[1].clone();
-        let filename = args[2].clone();
+    pub fn new(mut args: env::Args) -> Result<Config, &'static str> {
+        args.next();
+
+        let query = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a query string"),
+        };
+
+        let filename = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a file name"),
+        };
 
         let case_sensitive = env::var("CASE_INSENSITIVE").is_err();
 
@@ -92,28 +115,19 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 }
 
 pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
-    let mut results = Vec::new();
-
-    for line in contents.lines() {
-        if line.contains(query) {
-            results.push(line);
-        }
-    }
-
-    results
+    contents
+        .lines()
+        .filter(|line| line.contains(query))
+        .collect()
 }
 
 pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
     let query = query.to_lowercase();
-    let mut results = Vec::new();
 
-    for line in contents.lines() {
-        if line.to_lowercase().contains(&query) {
-            results.push(line);
-        }
-    }
-
-    results
+    contents
+        .lines()
+        .filter(|line| line.to_lowercase().contains(&query))
+        .collect()
 }
 
 #[cfg(test)]
