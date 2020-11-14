@@ -17,6 +17,15 @@
     Then we use the and_then method on Result to continue on to creating a post only in the case where we actually found a user
 
     This way enables handling all of the different errors without having a mess of conditionals
+
+    PUBLISHING A POST
+
+    Simply need a post_id in the url path for processing a post publish
+
+    FETCHING POSTS
+
+    Can fetch posts either given a user_id or just fetch them all
+
 ***/
 
 use crate::errors::AppError;
@@ -48,6 +57,39 @@ fn add_post(
 
             models::create_post(conn, &user, title.as_str(), body.as_str())
         })
+    })
+    .then(convert)
+}
+
+fn publish_post(
+    post_id: web::Path<i32>,
+    pool: web::Data<Pool>
+) -> impl Future<Item = HttpResponse, Error = AppError> {
+    web::block(move || {
+        let conn: &SqliteConnection = &pool.get().unwrap();
+        
+        models::publish_post(conn, post_id.into_inner())
+    })
+    .then(convert)
+}
+
+fn user_posts(
+    user_id: web::Path<i32>,
+    pool: web::Data<Pool>
+) -> impl Future<Item = HttpResponse, Error = AppError> {
+    web::block(move || {
+        let conn: &SqliteConnection = &pool.get().unwrap();
+
+        models::user_posts(conn, user_id.into_inner())
+    })
+    .then(convert)
+}
+
+fn all_posts(pool: web::Data<Pool>) -> impl Future<Item = HttpResponse, Error = AppError> {
+    web::block(move || {
+        let conn: &SqliteConnection = &pool.get().unwrap();
+
+        models::all_posts(conn)
     })
     .then(convert)
 }
