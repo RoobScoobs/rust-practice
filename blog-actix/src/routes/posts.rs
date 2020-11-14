@@ -26,6 +26,12 @@
 
     Can fetch posts either given a user_id or just fetch them all
 
+    ROUTE CONFIGURATION
+
+    The path /users/{id}/posts accepts both a POST and a GET request
+    which route to our add_post and user_posts handlers, respectively
+    Otherwise this is analogous to our configuration of the users routes
+
 ***/
 
 use crate::errors::AppError;
@@ -92,4 +98,14 @@ fn all_posts(pool: web::Data<Pool>) -> impl Future<Item = HttpResponse, Error = 
         models::all_posts(conn)
     })
     .then(convert)
+}
+
+pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::resource("/users/{id}/posts")
+            .route(web::post().to_async(add_post))
+            .route(web::get().to_async(user_posts))
+    )
+    .service(web::resource("/posts").route(web::get().to_async(all_posts)))
+    .service(web::resource("/posts/{id}/publish").route(web::post().to_async(publish_post)));
 }
