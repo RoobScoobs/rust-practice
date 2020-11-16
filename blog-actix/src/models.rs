@@ -200,12 +200,20 @@
    We then tell load the type to coerce these columns into
 
    user_posts takes the user_id as input and retrieves a vector of posts or an empty set if the user does not exist
+
+   COMMENT MODEL
+
+   Quite similar to our Post struct except we have an extra belongs_to attribute for the User and Post associations
    
  *
 ***/
 
 use crate::errors::AppError;
-use crate::schema::{users, posts};
+use crate::schema::{
+   users,
+   posts,
+   comments
+};
 use diesel::prelude::*;
 
 type Result<T> = std::result::Result<T, AppError>;
@@ -224,6 +232,16 @@ pub struct Post {
    pub title: String,
    pub body: String,
    pub published: bool,
+}
+
+#[derive(Queryable, Associations, Identifiable, Serialize, Debug)]
+#[belongs_to(User)]
+#[belongs_to(Post)]
+pub struct Comment {
+   pub id: i32,
+   pub user_id: i32,
+   pub post_id: i32,
+   pub body: String,
 }
 
 pub enum UserKey<'a> {
