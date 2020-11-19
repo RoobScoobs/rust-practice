@@ -227,6 +227,37 @@
 
    Using the select method narrows down which columns from the posts table we need to construct our PostWithComment struct
    and then load a tuple (Comment and PostWithComment) which results in getting the return type we want
+
+   REVISING THE POST FETCHING FUNCTIONS
+
+   By changing the result form of
+      Vec<(Post,User)>
+            to
+      Vec<((Post, User), Vec<(Comment, User)>)>
+
+   it will include not only the post and its author/user but also a vector of comments with their respective author/user
+
+   Modifying the all_posts function to perform the same query as before
+   which gets all posts and their corresponding authors 
+
+      let posts_with_user = query.load::<(Post, User)>(conn)?;
+
+   Then using the unzip method on std::iter::Iterator turns an iterator of pairs into a pair of iterators aka able to turn
+      Vec<(Post, User)> into (Vec<Post>, Vec<User>)
+
+   Can then fetch all of the comments that belong to those posts
+   by passing a reference to that vector to belonging_to which we get from deriving Associations on Comment
+
+   To associate the comments into chunks indexed by the posts we use the grouped_by method provided by Diesel
+   In the end this transforms a Vec<(Comment, User)> into Vec<Vec<(Comment, User)>>
+
+   Finally use the zip method on iterator to take all of these vectors
+   and combine them into the output format we're looking for
+
+   posts.into_iter().zip(post_users) just turns (Vec<Post>, Vec<User>) back into Vec<(Post, User)>
+
+   The last zip(comments) takes Vec<(Post, User)> and Vec<Vec<(Comment, User)>>
+   and puts them together into a single vector of our desired return type
  *
 ***/
 
@@ -345,26 +376,43 @@ pub fn publish_post(conn: &SqliteConnection, post_id: i32) -> Result<Post> {
    })
 }
 
-pub fn all_posts(conn: &SqliteConnection) -> Result<Vec<(Post, User)>> {
-   posts::table
+pub fn all_posts(conn: &SqliteConnection) -> Result<Vec<((Post, User), Vec<(Comment, User)>)>> {
+   let query = posts::table
       .order(posts::id.desc())
       .filter(posts::published.eq(true))
       .inner_join(users::table)
-      .select((posts::all_columns, (users::id, users::username)))
-      .load::<(Post,User)>(conn)
-      .map_err(Into::into)
+      .select((posts::all_columns, (users::id, users::username)));
+
+   let posts_with_user = query.load::<(Post, User)>(conn)?;
+
+   let (posts, post_users): (Vec<_>, Vec<_>) = posts_with_user.into_iter().unzip();
+
+   let comments = Comment::belonging_to(&posts)
+      .inner_join(users::table)
+      .select((comments::all_columns, (users::id, users::username)))
+      .load::<(Comment, User)>(conn)?
+      .grouped_by(&posts);
+
+   Ok(posts.into_iter().zip(post_users).zip(comments).collect())
 }
 
 pub fn user_posts(
    conn: &SqliteConnection,
    user_id: i32
-) -> Result<Vec<Post>> {
-   posts::table
+) -> Result<Vec<(Post, Vec<(Comment, User)>)>> {
+   let posts::table
       .filter(posts::user_id.eq(user_id))
       .order(posts::id.desc())
       .select(posts::all_columns)
-      .load::<Post>(conn)
-      .map_err(Into::into)
+      .load::<Post>(conn)?;
+
+   let comments = Comment::belonging_to(&posts)
+      .inner_join(users::table)
+      .select((comments::all_columns, (users::id, users::username)))
+      .load::<(Comment, User)>(conn)?
+      .grouped_by(&posts);
+
+   Ok(posts.into_iter().zip(comments).collect())
 }
 
 pub fn create_comment(
