@@ -400,7 +400,7 @@ pub fn user_posts(
    conn: &SqliteConnection,
    user_id: i32
 ) -> Result<Vec<(Post, Vec<(Comment, User)>)>> {
-   let posts::table
+   let posts = posts::table
       .filter(posts::user_id.eq(user_id))
       .order(posts::id.desc())
       .select(posts::all_columns)

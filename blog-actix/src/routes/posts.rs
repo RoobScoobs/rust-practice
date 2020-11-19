@@ -32,6 +32,18 @@
     which route to our add_post and user_posts handlers, respectively
     Otherwise this is analogous to our configuration of the users routes
 
+    TESTING THE POST API
+
+    create a post: curl -s -H 'Content-Type: application/json' -X POST http://localhost:8998/users/1/posts -d 
+        '{"title":"Ruben says hello", "body":"Hello to all"}'
+
+    publish a post: curl -s -H 'Content-Type: application/json' -X POST http://localhost:8998/posts/1/publish
+
+    list all posts: curl -s -H 'Content-Type: application/json' http://localhost:8998/posts
+
+    view posts: curl -s -H 'Content-Type: application/json' http://localhost:8998/users/1/posts
+
+
 ***/
 
 use crate::errors::AppError;
