@@ -205,6 +205,28 @@
 
    Quite similar to our Post struct except we have an extra belongs_to attribute for the User and Post associations
    
+   FETCHING ALL THE COMMENTS FROM A POST
+
+   The returned result should contain the user who made the comment, along with the comment
+   The post is unnecessary as it is known 
+
+   FETCHING ALL COMMENTS BY A USER
+
+   Notable information to include would be the post the comment is on,
+   however fetching all of the post data would be excessive
+   so a new struct
+         PostWithComment {}
+   can be made to represent the subset of the post data
+
+   The struct derives Queryable but not Identifiable
+   It can be constructed from a query,
+   but it does not represent an entire row in a table
+
+   The user_comments function filters the comments table based on the passed in user_id
+   and then joins with the posts data to get the extra information about the posts
+
+   Using the select method narrows down which columns from the posts table we need to construct our PostWithComment struct
+   and then load a tuple (Comment and PostWithComment) which results in getting the return type we want
  *
 ***/
 
@@ -242,6 +264,13 @@ pub struct Comment {
    pub user_id: i32,
    pub post_id: i32,
    pub body: String,
+}
+
+#[derive(Queryable, Serialize, Debug)]
+pub struct PostWithComment {
+   pub id: i32,
+   pub title: String,
+   pub published: bool,
 }
 
 pub enum UserKey<'a> {
@@ -359,4 +388,28 @@ pub fn create_comment(
          .first(conn)
          .map_err(Into::into)
    })
+}
+
+pub fn post_comments(conn: &SqliteConnection, post_id: i32) -> Result<Vec<(Comment, User)>> {
+   comments::table
+      .filter(comments::post_id.eq(post_id))
+      .inner_join(users::table)
+      .select((comments::all_columns, (users::id, users::username)))
+      .load::<(Comment, User)>(conn)
+      .map_err(Into::into)
+}
+
+pub fn user_comments(
+   conn: &SqliteConnection,
+   user_id: i32
+) -> Result<Vec<(Comment, PostWithComment)>> {
+   comments::table
+      .filter(comments::user_id.eq(user_id))
+      .inner_join(posts::table)
+      .select((
+         comments::all_columns,
+         (posts::id, posts::title, posts::published)
+      ))
+      .load::<(Comment, PostWithComment)>(conn)
+      .map_err(Into::into)
 }
