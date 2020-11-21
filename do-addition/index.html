@@ -1,0 +1,36 @@
+<!-- 
+    LOADING THE WASM CODE
+
+    Must use an async function as all Wasm code must be asynchronously loaded
+
+    The WebAssembly module in JavaScript exposes APIs for working with Wasm files and types,
+    but the easiest to use is instantiateStreaming which let’s us fetch our Wasm code
+    and turn it into a module which we can interact with from JavaScript
+
+    This function (instantiateStreaming) returns a result object which contains an instance object and a module object
+
+    The instance object contains references to all the exported Wasm functions
+
+    The add function can be found as a property on the exports property of the instance object
+    Therefore, we can treat instance.exports.add like a JavaScript function
+
+    The Rust compiler knows how to turn Rust code into the Wasm format
+    The JavaScript engine in the browser knows how to load Wasm code
+
+    The one caveat is that the only Rust functions
+    which are valid to expose to Wasm only deal with integers and floating point numbers
+ -->
+
+<!DOCTYPE html>
+<script type="module">
+    async function init() {
+        const { instance } = await WebAssembly.instantiateStreaming(
+            fetch("./target/wasm32-unknown-unknown/release/do_addition.wasm")
+        );
+
+        const answer = instance.exports.add(1, 2);
+        console.log(answer);
+    }
+
+    init();
+</script>
