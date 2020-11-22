@@ -1,0 +1,26 @@
+<!-- 
+     First step is to call a helper function (passStringToWasm) that takes our input argument
+     and turns it into the pointer and length that we can call our Wasm function with
+
+     This function puts the JavaScript string we took as an argument
+     into the linear memory space shared between JavasScript and Wasm
+ -->
+
+<!DOCTYPE html>
+<script type="module">
+    function greet(arg0) {
+        const [ptr0, len0] = passStringToWasm(arg0);
+        try {
+            const retptr = wasm.greet(ptr0, len0);
+            const mem = new Uint32Array(wasm.memory.buffer);
+            const rustptr = mem[retptr / 4];
+            const rustlen = mem[retptr / 4 + 1];
+            const realRet = getStringFromWasm(rustptr, rustlen).slice();
+            wasm.__boxed_str_free(retptr);
+            return realRet;
+        }
+        finally {
+            wasm.__free(ptr0, len0);
+        }
+    }
+</script>
