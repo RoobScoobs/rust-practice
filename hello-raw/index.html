@@ -1,13 +1,90 @@
-<!-- 
-     First step is to call a helper function (passStringToWasm) that takes our input argument
-     and turns it into the pointer and length that we can call our Wasm function with
+<!--
+    THE INTERACTION WITH WEBASSEMBLY
+  
+    First step is to call a helper function (passStringToWasm) that takes our input argument
+    and turns it into the pointer and length that we can call our Wasm function with
 
-     This function puts the JavaScript string we took as an argument
-     into the linear memory space shared between JavasScript and Wasm
+    This function puts the JavaScript string we took as an argument
+    into the linear memory space shared between JavasScript and Wasm
+
+    Inside the try block, first call the greet function that's exposed from rust
+    with the pointer and length returned from the helper function
+    and declare a local variable to hold the pointer to the String that is returned
+    
+    This pointer points to a chunk of memory inside the Wasm linear memory region
+
+    Able to get a handle to the memory region shared with Wasm
+    via the buffer property on the memory property that is exposed on our Wasm instance
+
+    The WebAssembly.Memory object can do two things,
+    one is grow the memory region via a grow method,
+    the other is give a handle to the underlying memory via the buffer property
+
+    FUNDAMENTAL CONCEPT FOR WORKING WITH THE SHARED MEMORY REGION BETWEEN JS AND WASM
+
+    JavaScript has a variety of typed arrays for exposing an array-like view of an underlying buffer of binary data
+
+    The Wasm memory region is 32-bits, so we can construct an array which contains unsigned 32-bit integers
+    by passing the Wasm buffer into the Uint32Array constructor
+
+    Are able to create a typed array with the shared buffer and then read or write to this typed array
+    Wasm can also read and write this buffer
+
+    HOW TO GET THE RUST POINTER AND LENGTH
+
+    The pointer that is returned from the Wasm function (greet) is an offset from the beginning of the memory region, due to the return type
+    
+    Add to the fact that the array view over the memory buffer has type Uint32
+    have to do a little bit of arithmetic to get the array index for the pointer to the underlying bytes ergo
+        - mem[retptr / 4]
+    and the index of the length of the returned String
+        - mem[retptr / 4 + 1]
+
+    This works because in Rust a String is just a Vec<u8>
+    and a Vec<u8> is a struct with two fields,
+    the first being roughly a pointer to a buffer of u8 values,
+    and the second is a length
+
+    EXTRACTING THE STRING FROM THE WASM MEMORY REGION
+
+    Given a pointer to some bytes and a length, use another utility function
+    to extract a string from the Wasm memory region into JavaScript
+
+    Calling slice() to make a copy tells Rust to free the memory it is currently using for that string
+
+    The __boxed_str_free will take a *mut String and do whatever is necessary to free it
+
+    No matter what happens in this whole process, if something goes wrong or not,
+    the finally block will execute and free the memory in the Wasm address space
+    associated with the argument
+
+    We used passStringToWasm to move the argument into the Wasm memory so we use __free to let it go
+
+    THE passStringToWasm HELPER FUNCTION
+
+    JavaScript provides an API for turning a string into a memory buffer via a TextEncoder object
+
+    Want the string encoded as UTF-8 to conform to the invariants in our Rust code
+
+    Then ask the Wasm instance to allocate memory of this particular size via a call to __malloc
+
+    Create a Uint8Array with the Wasm memory buffer
+    so that we can set the newly allocated memory to the bytes of our string
  -->
 
 <!DOCTYPE html>
 <script type="module">
+    function passStringToWasm(arg) {
+        const buf = new TextEncoder('utf-8').encode(arg);
+        const len = buf.length;
+        const ptr = wasm.__malloc(len);
+
+        let array = new Uint8Array(wasm.memory.buffer);
+        array.set(buf, ptr);
+
+        return [ptr, len];
+    }
+
     function greet(arg0) {
         const [ptr0, len0] = passStringToWasm(arg0);
         try {
