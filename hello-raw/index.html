@@ -47,7 +47,7 @@
 
     EXTRACTING THE STRING FROM THE WASM MEMORY REGION
 
-    Given a pointer to some bytes and a length, use another utility function
+    Given a pointer to some bytes and a length, use another utility function (getStringFromWasm)
     to extract a string from the Wasm memory region into JavaScript
 
     Calling slice() to make a copy tells Rust to free the memory it is currently using for that string
@@ -70,6 +70,16 @@
 
     Create a Uint8Array with the Wasm memory buffer
     so that we can set the newly allocated memory to the bytes of our string
+
+    THE getStringFromWasm HELPER FUNCTION
+
+    This is mostly the reverse process of putting the string into the memory region
+    
+    Get a Uint8Array view of the Wasm memory
+    and then use slice to copy the bytes into a new typed array specified by the starting and ending points
+
+    Given this array of bytes we use a TextDecoder to turn it into a string,
+    again assuming that the bytes represent a UTF-8 string
  -->
 
 <!DOCTYPE html>
@@ -83,6 +93,14 @@
         array.set(buf, ptr);
 
         return [ptr, len];
+    }
+
+    function getStringFromWasm(ptr, len) {
+        const mem = new Unit8Array(wasm.memory.buffer);
+        const slice = mem.slice(ptr, ptr + len);
+        const ret = new TextDecoder('utf-8').decode(slice);
+
+        return ret;
     }
 
     function greet(arg0) {
