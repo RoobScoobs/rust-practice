@@ -93,7 +93,60 @@
     Whoever gets this raw pointer is responsible for managing the memory
     and must do something to ensure the box gets destroyed when it is no longer needed,
     otherwise memory will be leaked
+
+    MEMORY ALLOCATION AND DEALLOCATION FUNCTIONS
+
+    __malloc fn
+
+        This function should be publicly accessible, using the “C” calling convention, 
+        and the name should be __malloc so we specify #[no_mangle]
+
+        Take a size as input (we use the byte length of our string)
+        and return a pointer to some allocated bytes of that size
+
+        The first thing to do is get the minimum alignment for a usize based on the Application Binary Interface (ABI)
+
+        Need this to pass to the Layout constructor because in order to allocate memory you need both a size an an alignment
+
+        Next thing to do is generate a memory layout for the particular size and alignment
+
+        This can fail and return an error if the alignment is bad (zero or not a power of two) or if size is too big, otherwise this should succeed
+
+        Given the layout, can then proceed to actually allocating memory
+
+        If the resulting size of the layout is not positive
+        then there's no need to allocate anything,
+        and in this case the alignment is cast to the correct return type (align as *mut u8)
+
+        In fact calling alloc with a zero sized Layout could lead to undefined behavior depending on the architecture
+
+        Otherwise there's a real region of memory that needs to be allocated
+        so the alloc function provided by the standard library can be used
+
+        It is possible to customize the allocator used, but by default a standard one is used per platform
+
+        Get back a pointer from alloc --- alloc(layout)
+        which is the location of the newly allocated region of memory of the size and alignment specified by our layout
+
+        Only return this pointer if it is not null
+        A null pointer returned from alloc most likely means you are out of memory
+
+        **Note**
+            If you use any method that can panic in your Rust code,
+            even if you definitely never panic, your Wasm module will increase quite a bit in size
+            because of extra code related to panics
+
+            There are non-panicing alternatives to a lot of methods
+            and there are other things you can do in these scenarios
+            It is possible to configure your code so that you are not allowed to panic,
+            notably by using no_std which means disallowing anything from the std module,
+            but that can be extreme (although necessary in some environments)
+
+        
 ***/
+
+use std::alloc::{alloc, dealloc, Layout};
+use std::mem;
 
 pub extern "C" fn greet(name: &str) -> String {
     format!("Hello, {}!", name)
@@ -110,4 +163,25 @@ pub extern "C" fn __greet_wrapper(
     };
     let _ret = greet(arg0);
     Box::into_raw(Box::new(_ret))
+}
+
+#[no_mangle]
+pub extern "C" fn __malloc(size: usize) -> *mut u8 {
+    let align = mem::align_of::<usize>();
+
+    if let Ok(layout) = Layout::from_size_align(size, align) {
+        unsafe {
+            if layout.size() > 0 {
+                let ptr = alloc(layout);
+                if !ptr.is_null() {
+                    return ptr
+                }
+            }
+            else {
+                return align as *mut u8
+            }
+        }
+    }
+
+    panic!("malloc failed")
 }
