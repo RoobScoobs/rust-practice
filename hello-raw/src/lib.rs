@@ -142,7 +142,18 @@
             notably by using no_std which means disallowing anything from the std module,
             but that can be extreme (although necessary in some environments)
 
-        
+    __free fn
+
+        This function takes care of deallocating memory
+
+        The fn takes a pointer to the memory region to deallocate
+        and the size of that region
+
+        If the size is zero then there is nothing to do
+
+        Otherwise perform the reverse of allocation:
+        get an alignment, use that to get a Layout,
+        and then pass the pointer and the layout to dealloc
 ***/
 
 use std::alloc::{alloc, dealloc, Layout};
@@ -185,3 +196,15 @@ pub extern "C" fn __malloc(size: usize) -> *mut u8 {
 
     panic!("malloc failed")
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn __free(ptr: *mut u8, size: usize) {
+    if size == 0 {
+        return
+    }
+
+    let align = mem::align_of::<usize>();
+    let layout = Layout::from_size_align_unchecked(size, align);
+
+    dealloc(ptr, layout);
+} 
