@@ -84,38 +84,50 @@
 
 <!DOCTYPE html>
 <script type="module">
-    function passStringToWasm(arg) {
-        const buf = new TextEncoder('utf-8').encode(arg);
-        const len = buf.length;
-        const ptr = wasm.__malloc(len);
+    async function init() {
+        const { instance } = await WebAssembly.instantiateStreaming(
+            fetch("./target/wasm32-unknown-unknown/release/hello_raw.wasm")
+        );
+        const wasm = instance.exports;
 
-        let array = new Uint8Array(wasm.memory.buffer);
-        array.set(buf, ptr);
+        function passStringToWasm(arg) {
+            const buf = new TextEncoder('utf-8').encode(arg);
+            const len = buf.length;
+            const ptr = wasm.__malloc(len);
 
-        return [ptr, len];
-    }
+            let array = new Uint8Array(wasm.memory.buffer);
+            array.set(buf, ptr);
 
-    function getStringFromWasm(ptr, len) {
-        const mem = new Unit8Array(wasm.memory.buffer);
-        const slice = mem.slice(ptr, ptr + len);
-        const ret = new TextDecoder('utf-8').decode(slice);
-
-        return ret;
-    }
-
-    function greet(arg0) {
-        const [ptr0, len0] = passStringToWasm(arg0);
-        try {
-            const retptr = wasm.greet(ptr0, len0);
-            const mem = new Uint32Array(wasm.memory.buffer);
-            const rustptr = mem[retptr / 4];
-            const rustlen = mem[retptr / 4 + 1];
-            const realRet = getStringFromWasm(rustptr, rustlen).slice();
-            wasm.__boxed_str_free(retptr);
-            return realRet;
+            return [ptr, len];
         }
-        finally {
-            wasm.__free(ptr0, len0);
+
+        function getStringFromWasm(ptr, len) {
+            const mem = new Unit8Array(wasm.memory.buffer);
+            const slice = mem.slice(ptr, ptr + len);
+            const ret = new TextDecoder('utf-8').decode(slice);
+
+            return ret;
         }
+
+        function greet(arg0) {
+            const [ptr0, len0] = passStringToWasm(arg0);
+            try {
+                const retptr = wasm.greet(ptr0, len0);
+                const mem = new Uint32Array(wasm.memory.buffer);
+                const rustptr = mem[retptr / 4];
+                const rustlen = mem[retptr / 4 + 1];
+                const realRet = getStringFromWasm(rustptr, rustlen).slice();
+                wasm.__boxed_str_free(retptr);
+                return realRet;
+            }
+            finally {
+                wasm.__free(ptr0, len0);
+            }
+        }
+
+        const result = greet("Rust");
+        conosle.log(result); // should print Hello, Rust!
     }
+
+    init();
 </script>

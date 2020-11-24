@@ -154,6 +154,21 @@
         Otherwise perform the reverse of allocation:
         get an alignment, use that to get a Layout,
         and then pass the pointer and the layout to dealloc
+
+    __boxed_str_free fn
+
+        This function will help prevent leaking the String that is returned
+
+        Box::from_raw is an unsafe function
+        which takes a raw pointer and constructs a box from it
+        
+        By creating this box and putting it into a local variable there's assurance
+        that the Box will be dropped at the end of the function body
+        
+        When the Box is dropped, as it is the sole owner of the String, the String will also be dropped
+
+        The input type being *mut String is sufficient to tell Rust the right code to execute to drop
+        both the Box and the String as this drives the type inference of from_raw
 ***/
 
 use std::alloc::{alloc, dealloc, Layout};
@@ -207,4 +222,9 @@ pub unsafe extern "C" fn __free(ptr: *mut u8, size: usize) {
     let layout = Layout::from_size_align_unchecked(size, align);
 
     dealloc(ptr, layout);
-} 
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn __boxed_str_free(ptr: *mut String) {
+    let _b = Box::from_raw(ptr);
+}
