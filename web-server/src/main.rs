@@ -61,6 +61,27 @@
         
             
     An invalid UTF-8 sequence will be replaced with � (the U+FFFD replacement character)
+
+    WRITING A RESPONSE
+
+    Responses have the following format:
+        HTTP-Version Status-Code Reason-Phrase CRLF
+        headers CRLF
+        message-body
+
+    So this example will return a simple response
+    HTTP/1.1 200 OK\r\n\r\n
+
+    Bind the string literal to the response variable,
+    and call as_bytes on the response to convert the string data to bytes
+
+    The write method on stream takes a &[u8]
+    and sends those bytes directly down the connection
+
+    Because the write operation could fail, unwrap is used on any error result
+
+    flush() will wait and prevent the program from continuing until all the bytes are written to the connection;
+    TcpStream contains an internal buffer to minimize calls to the underlying operating system
 ***/
 
 use std::io::prelude::*;
@@ -82,5 +103,8 @@ fn handle_connection(mut stream: TcpStream) {
 
     stream.read(&mut buffer).unwrap();
 
-    println!("Request: {}", String::from_utf8_lossy(&buffer[..]));
+    let response = "HTTP/1.1 200 OK\r\n\r\n";
+
+    stream.write(response.as_bytes()).unwrap();
+    stream.flush().unwrap();
 }
