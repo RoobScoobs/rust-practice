@@ -82,11 +82,26 @@
 
     flush() will wait and prevent the program from continuing until all the bytes are written to the connection;
     TcpStream contains an internal buffer to minimize calls to the underlying operating system
+
+    RESPONSE AS HTML
+
+    Using format! can add the file’s contents as the body of the success response
+    To ensure a valid HTTP response,
+    the Content-Length header - which is set to the size of our response body,
+    in this case the size of index.html - is added
+
+    Currently ignoring the request data in buffer
+    and just sending back the contents of the HTML file unconditionally
+    which means requesting 127.0.0.1:7878/something-else in the browser,
+    will return the same HTML response
+
+    
 ***/
 
 use std::io::prelude::*;
 use std::net::TcpListener;
 use std::net::TcpStream;
+use std::fs;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
@@ -103,7 +118,13 @@ fn handle_connection(mut stream: TcpStream) {
 
     stream.read(&mut buffer).unwrap();
 
-    let response = "HTTP/1.1 200 OK\r\n\r\n";
+    let contents = fs::read_to_string("index.html").unwrap();
+
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+        contents.len(),
+        contents
+    );
 
     stream.write(response.as_bytes()).unwrap();
     stream.flush().unwrap();
