@@ -34,9 +34,38 @@
     
     Instead, connection attempts are being iterated through
 
+    READING THE REQUEST
+
+    std::io::prelude enables access to certain traits
+    that provides reading from and writing capabilities to the stream
+
+    handle_connection fn
+
+        In the handle_connection function, the stream parameter is mutable
+        because the TcpStream instance's internal state might change
+
+        The stream instance keeps track of what data it returns internally,
+        and can read more data than asked for and save that data for the next time
+
+        Reading from the stream:
+
+        First Step
+            - declare a buffer on the stack to hold the data that is read in
+            - 1024 bytes should be sufficient for the sake of this example (buffer management would need to be more complicated irl)
+            - passing the buffer to stream.read will read bytes from the TcpStream
+              and put them in the buffer
+
+        Second step
+            - convert the bytes in the buffer to a string and print the string
+            - String::from_utf8_lossy function takes a &[u8] and produces a String from it
+        
+            
+    An invalid UTF-8 sequence will be replaced with � (the U+FFFD replacement character)
 ***/
 
+use std::io::prelude::*;
 use std::net::TcpListener;
+use std::net::TcpStream;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
@@ -44,6 +73,14 @@ fn main() {
     for stream in listener.incoming() {
         let stream = stream.unwrap();
 
-        println!("Connection established!");
+        handle_connection(stream);
     }
+}
+
+fn handle_connection(mut stream: TcpStream) {
+    let mut buffer = [0; 1024];
+
+    stream.read(&mut buffer).unwrap();
+
+    println!("Request: {}", String::from_utf8_lossy(&buffer[..]));
 }
