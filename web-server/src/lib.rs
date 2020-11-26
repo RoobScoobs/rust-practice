@@ -39,13 +39,37 @@
     
     Once a valid size is received, use the Vec::with_capacity fn
     to essentially perform the same task as Vec::new, however, with_capacity
-    preallocates space in the vector, which is more efficient 
+    preallocates space in the vector, which is more efficient
+
+    A WORKER STRUCT RESPONSIBLE FOR SENDING CODE FROM THE THREADPOOL TO A THREAD
+
+    The standard library provides thread::spawn as a way to create threads,
+    and thread::spawn expects to get some code the thread should run as soon as the thread is created
+
+    However, in this example, want the ability to create the threads
+    and have them wait for code that will be sent later
+
+    To implement this behavior a data structure called Worker is introduced,
+    which is a common term in pooling implementations 
+
+    Instead of storing a vector of JoinHandle<()> instances in the thread pool,
+    instances of the Worker struct will be stored
+
+    Each Worker will store a single JoinHandle<()> instance
+
+    A Worker will have a method that will take a closure of code to run
+    and send it to the already running thread for execution
 ***/
 
 use std::thread;
 
 pub struct ThreadPool {
-    threads: Vec<thread::JoinHandle<()>>,
+    workers: Vec<Worker>,
+}
+
+struct Worker {
+    id: usize,
+    thread: thread::JoinHandle<()>,
 }
 
 impl ThreadPool {
@@ -60,12 +84,23 @@ impl ThreadPool {
     pub fn new(size: usize) -> ThreadPool {
         assert!(size > 0);
 
-        let mut threads = Vec::with_capacity(size);
+        let mut workers = Vec::with_capacity(size);
 
-        for _ in 0..size {
-            // create some threads and store them in the vector
+        for id in 0..size {
+            workers.push(Worker::new(id));
         }
 
-        ThreadPool { threads }
+        ThreadPool { workers }
+    }
+}
+
+impl Worker {
+    fn new(id: usize) -> Worker {
+        let thread = thread::spawn(|| {});
+
+        Worker {
+            id,
+            thread
+        }
     }
 }
