@@ -37,15 +37,17 @@
     Write the API of the code so it’s structured in the way you want to call it;
     then implement the functionality within that structure
 
+    Using ThreadPool::new will create a new thread pool with a configurable number of threads
+
+    Within the for loop pool.execute has a similar interface as thread::spawn
+    in that it takes a closure the pool should run for each stream
+
 ***/
 
 use std::io::prelude::*;
 use std::net::TcpListener;
 use std::net::TcpStream;
-
-struct ThreadPool {
-    
-}
+use web_server::ThreadPool;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
