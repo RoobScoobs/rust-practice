@@ -59,17 +59,50 @@
 
     A Worker will have a method that will take a closure of code to run
     and send it to the already running thread for execution
+
+    SENDING REQUESTS TO THREADS VIA CHANNELS
+
+    Channels - a simple way to communicate between two threads
+
+    Plan:
+        - the ThreadPool will create a channel and hold on to the sending side of the channel
+        - each Worker will hold on to the receiving side of the channel
+        - create a new Job struct that will hold the closures we want to send down the channel
+        - the execute method will send the job it wants to execute down the sending side of the channel
+        - in its thread, the Worker will loop over its receiving side of the channel and execute the closures of any jobs it receives
+
+    Channel implementation that Rust provides is multiple producer, single consumer
+    thus cannot pass receiver to multiple Worker instances; in other words we can't
+    clone the consuming end of the channel
+
+    The aim is to distribute the jobs across threads by sharing the single receiver among all the workers
+
+    Additionally, taking a job off the channel queue involves mutating the receiver,
+    so the threads need a safe way to share and modify receiver
+
+    To share ownership across multiple threads and allow the threads to mutate the value,
+    the thread-safe smart pointer Arc<Mutex<T>> can be used
+
+    The Arc type will let multiple workers own the receiver,
+    and Mutex will ensure that only one worker gets a job from the receiver at a time
 ***/
 
 use std::thread;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 
 pub struct ThreadPool {
     workers: Vec<Worker>,
+    sender: mpsc::Sender<Job>,
 }
 
 struct Worker {
     id: usize,
     thread: thread::JoinHandle<()>,
+}
+
+struct Job {
+
 }
 
 impl ThreadPool {
@@ -84,19 +117,28 @@ impl ThreadPool {
     pub fn new(size: usize) -> ThreadPool {
         assert!(size > 0);
 
+        let (sender, receiver) = mpsc::channel();
+
+        let receiver = Arc::new(Mutex::new(receiver));
+
         let mut workers = Vec::with_capacity(size);
 
         for id in 0..size {
-            workers.push(Worker::new(id));
+            workers.push(Worker::new(id, Arc::clone(&receiver)));
         }
 
-        ThreadPool { workers }
+        ThreadPool {
+            workers,
+            sender
+        }
     }
 }
 
 impl Worker {
-    fn new(id: usize) -> Worker {
-        let thread = thread::spawn(|| {});
+    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
+        let thread = thread::spawn(|| {
+            receiver;
+        });
 
         Worker {
             id,
