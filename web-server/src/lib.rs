@@ -148,6 +148,72 @@
     This ensures that the lock is held during the call to recv,
     but it is released before the call to job(),
     allowing multiple requests to be serviced concurrently
+
+    GRACEFUL SHUTDOWN AND CLEANUP
+
+    Implementing the Drop trait will enable calling join on each of the threads in the pool
+    so they can finish the requests they’re working on before closing
+
+    In other words, when the pool is dropped,
+    the threads should all join to make sure they finish their work
+
+    First, loop through each of the thread pool workers
+
+    Using &mut for this because self is a mutable reference,
+    and also need to be able to mutate worker
+
+    For each worker call join() on that worker's thread
+    however, an error informs that join cannot be called
+    because we only have a mutable borrow of each worker
+    and join takes ownership of its argument
+
+    In order to solve this, Worker can hold an
+    Option<thread::JoinHandle<()>> instead
+    and can call the take method on Option to move the value of the Some variant
+    and leave a None variant in its place
+
+    Revise the drop implementation to use if let to destructure the Some
+    and get the thread; then call join on the thread
+
+    If a worker’s thread is already None,
+    the worker has already had its thread cleaned up, so nothing happens in that case
+
+    SIGNALING THE THREADS TO STOP LISTENING FOR JOBS
+
+    The closures run by the threads of the Worker instances won't shut down the threads
+    because they loop forever looking for jobs
+
+    Modify the threads so they listen for either a Job to run
+    or a signal that they should stop listening and exit the infinite loop
+
+    Instead of Job instances, the channel will send one of these two enum variants
+            NewJob(Job) - holds the Job the thread should run
+            Terminate - variant that will cause the thread to exit its loop and stop
+
+    Because there aren't any messages of the Terminate variety being created
+    have to change the Drop implementation to send Message::Terminate before calling join on each worker thread 
+
+    Now iterating over the workers twice:
+        - once to send one Terminate message for each worker
+        - once to call join on each worker’s thread
+    
+    If a message was sent and join was immediately called in the same loop,
+    it couldn't be guaranteed that the worker in the current iteration would be the one to get the message from the channel
+
+    WHY WE NEED SEPARATE LOOPS
+
+    Imagine a scenario with two workers: 
+        if there was a single loop to iterate through each worker,
+        on the first iteration a terminate message would be sent down the channel
+        and join called on the first worker’s thread
+
+        If that first worker was busy processing a request at that moment,
+        the second worker would pick up the terminate message from the channel and shut down
+
+        Ultimately left waiting on the first worker to shut down,
+        but it never would because the second thread picked up the terminate message
+
+    
 ***/
 
 use std::thread;
@@ -156,14 +222,19 @@ use std::sync::{Arc, Mutex};
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
+enum Message {
+    NewJob(Job),
+    Terminate,
+}
+
 pub struct ThreadPool {
     workers: Vec<Worker>,
-    sender: mpsc::Sender<Job>,
+    sender: mpsc::Sender<Message>,
 }
 
 struct Worker {
     id: usize,
-    thread: thread::JoinHandle<()>,
+    thread: Option<thread::JoinHandle<()>>,
 }
 
 impl ThreadPool {
@@ -200,23 +271,50 @@ impl ThreadPool {
     {
         let job = Box::new(f);
 
-        self.sender.send(job).unwrap();
+        self.sender.send(Message::NewJob(job)).unwrap();
+    }
+}
+
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        println!("Sending terminate message to all workers.");
+
+        for _ in &self.workers {
+            self.sender.send(Message::Terminate).unwrap();
+        }
+
+        println!("Shutting down all workers.");
+
+        for worker in &mut self.workers {
+            println!("shutting down worker {}", worker.id);
+
+            if let Some(thread) = worker.thread.take() {
+                thread.join().unwrap();
+            }
+        }
     }
 }
 
 impl Worker {
-    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
+    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
         let thread = thread::spawn(move || loop {
-            let job = receiver.lock().unwrap().recv().unwrap();
+            let message = receiver.lock().unwrap().recv().unwrap();
 
-            println!("Worker {} got a job; executing.", id);
-
-            job();
+            match message {
+                Message::NewJob(job) => {
+                    println!("Worker {} got a job; executing.", id);
+                    job();
+                }
+                Message::Terminate => {
+                    println!("Worker {} was told to terminate.", id);
+                    break;
+                }
+            }
         });
 
         Worker {
             id,
-            thread
+            thread: Some(thread)
         }
     }
 }

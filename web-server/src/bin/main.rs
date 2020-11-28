@@ -42,6 +42,14 @@
     Within the for loop pool.execute has a similar interface as thread::spawn
     in that it takes a closure the pool should run for each stream
 
+    TO SEE THE DROP TRAIT IN ACTION
+
+    Modify the TcpListener to accept only two requests before gracefully shutting down
+
+    The take method is defined in the Iterator trait and limits the iteration to the first two items at most
+
+    The ThreadPool will go out of scope at the end of main,
+    and the drop implementation will run
 ***/
 
 use std::io::prelude::*;
@@ -54,13 +62,15 @@ fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     let pool = ThreadPool::new(4);
 
-    for stream in listener.incoming() {
+    for stream in listener.incoming().take(2) {
         let stream = stream.unwrap();
 
         pool.execute(|| {
             handle_connection(stream);
         })
     }
+
+    println!("Shutting down.");
 }
 
 fn handle_connection(mut stream: TcpStream) {
@@ -69,8 +79,12 @@ fn handle_connection(mut stream: TcpStream) {
     stream.read(&mut buffer).unwrap();
 
     let get = b"GET / HTTP/1.1\r\n";
+    let sleep = b"GET /sleep HTTP/1.1\r\n";
 
     let (status_line, filename) = if buffer.starts_with(get) {
+        ("HTTP/1.1 200 OK\r\n\r\n", "index.html")
+    } else if  buffer.starts_with(sleep) {
+        thread::sleep(Duration::from_secs(5));
         ("HTTP/1.1 200 OK\r\n\r\n", "index.html")
     } else {
         ("HTTP/1.1 404 NOT FOUND\r\n\r\n", "404.html")
