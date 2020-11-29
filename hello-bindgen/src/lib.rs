@@ -38,6 +38,26 @@
 
     The next step is that wasm-pack uses the wasm-bindgen CLI to
     generate JavaScript wrapper code based on items annotated with the wasm_bindgen attribute
+
+    OTHER WASM TOPICS
+
+    THE DOM
+
+    As part of the wasm-bindgen project, there is the web_sys crate (https://rustwasm.github.io/wasm-bindgen/api/web_sys/)
+    which exposes a larger number of raw Web APIs
+
+    THREADS
+
+    There's a proposal to add threads to WebAssembly (https://github.com/WebAssembly/threads)
+
+    WEBASSEMBLY SYSTEM INTERFACE
+
+    There is an effort to port Wasm code across different systems
+    given that it is an assembly language for a logical machine
+
+    WASI is an attempt to standardize the system calls that Wasm knows about
+    so that different implementations can build to a spec
+    and therefore abstract the underlying operating system from the assembly language
 ***/
 
 use wasm_bindgen::prelude::*;
