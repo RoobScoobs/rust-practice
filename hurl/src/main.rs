@@ -45,5 +45,54 @@
         the user should be prompted for their password
         which should be used for the basic authentication scheme*
 
-    
+    QUICK OVERVIEW OF DEPENDENCIES
+
+    structopt - command line argument parsing and much more
+    heck - converting strings to difference cases (e.g. snake_case, camelCase)
+    log - logging facade for outputting verbose information
+    pretty_env_logger - logging implementation that works with log
+    serde - (de)serialization of data
+    serde_json - serde for JSON data
+    reqwest - HTTP client
+    rpassword - ask a user for a password without echoing it to the terminal
+
+    IMPORTS
+
+    The structopt crate defines a trait StructOpt and a custom derive
+    which allows you to derive that trait for a type you create
+
+    These two pieces together create a system for declaratively specifying how your application takes input from the command line
+
+    TitleCase is also a trait from the heck crate
+    so that we can convert strings into their title cased equivalents
+    For example, this_string would be converted to ThisString
+
+    The import of the trace macro from the log crate is
+    to leverage the log crate’s nice features to implement a form of verbose logging
+
+    When writing a library or other tool that wants to generate logs,
+    use the macros in the log crate to write those messages at various verbosity levels
+
+    MODULES
+
+    Splitting up the functionality into different modules:
+        - app
+        - client
+        - errors
+
+    TYPE ALIAS
+
+    One feature to support is pretty printing JSON responses with ordered keys
 ***/
+
+use structopt::StructOpt;
+use heck::TitleCase;
+use log::trace;
+
+mod app;
+mod client;
+mod errors;
+
+use errors::HurlResult;
+
+type OrderedJson = std::collections::BTreeMap<String, serde_json::Value>;
