@@ -83,6 +83,56 @@
     TYPE ALIAS
 
     One feature to support is pretty printing JSON responses with ordered keys
+
+    Rust has multiple hash map implementations in the standard library,
+    one in particular is the BTreeMap which stores entries sorted by the key
+
+    MAIN FN
+
+    Return a Result, in particular a custom HurlResult with a success type of ()
+    meaning the only meaningful value to report is for errors,
+    and that the Ok case just means everything worked
+
+    This shows that the HurlResult type that needs to be written is generic over the success type
+
+    The first line of the main function uses a call to from_args
+    which is defined on the StructOpt trait
+    Therefore, a struct called App needs to be created in the app module
+    which implements this trait
+    and it will handle all of the command line argument parsing
+
+    Then there's a call to validate which uses the ? operator to exit early if this function fails
+
+    This is not part of the argument parsing that StructOpt does
+    Rather, this is for handling certain constraints on the arguments that StructOpt is unable to enforce
+
+    LOGGING
+
+    Using the log_level method on the app will get a value to set up logging
+
+    The pretty_env_logger crate uses environment variables to configure what to print,
+    so the RUST_LOG environment variable is explicitly set to the value acquired
+
+    The format is RUST_LOG=binary_name=level
+    where binary_name is the name of the binary
+    and level is one of the five level values that log defines: trace, debug, info, warn, and error
+
+    CORE OF THE APP
+
+    Use the cmd (short for command), property on our app to direct what type of request to make
+
+    There are two cases, either there's a command which specifies the HTTP verb to use,
+    in that case the client module will make the request
+    and then call a handle_response function with the result
+
+    If there's no command, i.e. app.cmd matches None,
+    then the default case is triggered which just got a URL
+
+    In this case, a GET request is executed if there aren't any  data arguments,
+    otherwise make a POST request
+
+    Then also call a method on the client module to make this request
+    and pipe through to the same handle_response function
 ***/
 
 use structopt::StructOpt;
@@ -96,3 +146,34 @@ mod errors;
 use errors::HurlResult;
 
 type OrderedJson = std::collections::BTreeMap<String, serde_json::Value>;
+
+fn main() -> HurlResult<()> {
+    let mut app = app::App::from_args();
+    app.validate()?;
+
+    if let Some(level) = app.log_level() {
+        std::env::set_var("RUST_LOG", format!("hurl={}", level));
+        pretty_env_logger::init();
+    }
+
+    match app.cmd {
+        Some(ref method) => {
+            let resp = client::perform_method(&app, method)?;
+            handle_response(resp)
+        }
+        None => {
+            let url = app.url.take().unwrap();
+            let has_data = app.parameters.iter().any(|p| p.is_data());
+
+            let method = if has_data {
+                reqwest::Method::POST
+            } else {
+                reqwest::Method::GET
+            };
+
+            let resp = client::perform(&app, method, &url, &app.parameters)?;
+
+            handle_response(resp)
+        }
+    }
+}
