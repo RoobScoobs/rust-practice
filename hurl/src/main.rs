@@ -208,7 +208,12 @@
 
     PRINTING OUT THE BODY OF THE RESPONSE
 
-    
+    Making use of the raw text of the response in the variable result
+    and aim here is to pretty print the JSON results if the result is JSON
+
+    The actual representation of the JSON will be ordered by the keys if it is correctly parsed
+    This is because of the type alias for OrderedJson telling serde that it should use a BTreeMap
+    as the container for the top level JSON object
 ***/
 
 use structopt::StructOpt;
@@ -293,4 +298,20 @@ fn handle_response(
     headers.sort();
     s.push_str(&(&headers[..]).join("\n"));
     println!("{}", s);
+
+    let result_json: serde_json::Result<OrderedJson> = serde_json::from_str(&result);
+
+    match result_json {
+        Ok(result_value) => {
+            let result_str = serde_json::to_string_pretty(&result_value)?;
+
+            println!("{}", result_str);
+        }
+        Err(e) => {
+            trace!("Failed to parse result to JSON: {}", e);
+            println!("{}", result);
+        }
+    }
+
+    Ok(())
 }
