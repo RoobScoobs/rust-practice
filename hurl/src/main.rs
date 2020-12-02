@@ -133,6 +133,31 @@
 
     Then also call a method on the client module to make this request
     and pipe through to the same handle_response function
+
+    THE REPONSE HANDLER
+
+    Expect a response as input, which in this case is just the Response type from the reqwest crate,
+    and the HurlResult type is returned
+
+    The purpose of the hurl tool is to print useful information to standard output
+    and therefore “handling” the response means doing that printing
+
+    First will build up a string based on the metadata about the response,
+    then will print the rest of the body
+
+    Useful pieces of data include the status code of the response
+    as well as the version of HTTP that was used
+
+    The string s is going to be the buffer that is used for building up the output
+
+    format! can be used to create a String based on the version stored in the response,
+    the status code, and the description of that status
+
+    Example results:
+        "HTTP/1.1 200 OK", or
+        "HTTP/1.1 403 Forbidden"
+
+    Want to use the Debug output - {:?} - of resp.version()
 ***/
 
 use structopt::StructOpt;
@@ -176,4 +201,16 @@ fn main() -> HurlResult<()> {
             handle_response(resp)
         }
     }
+}
+
+fn handle_response(
+    mut resp: reqwest::Response
+) -> HurlResult<()> {
+    let status = resp.status();
+    let mut s = format!(
+        "{:?} {} {}\n",
+        resp.version(),
+        status.as_u16,
+        status.canonical_reason().unwrap_or("Unknown")
+    );
 }
