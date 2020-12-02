@@ -134,7 +134,7 @@
     Then also call a method on the client module to make this request
     and pipe through to the same handle_response function
 
-    THE REPONSE HANDLER
+    THE RESPONSE HANDLER
 
     Expect a response as input, which in this case is just the Response type from the reqwest crate,
     and the HurlResult type is returned
@@ -158,6 +158,57 @@
         "HTTP/1.1 403 Forbidden"
 
     Want to use the Debug output - {:?} - of resp.version()
+
+    SHOW THE HEADERS FROM THE RESPONSE
+
+    The response type has a headers function
+    which returns a reference to a Header type that gives us access to the headers
+    
+    Able to turn the headers into an iterator by calling the iter
+    so each key/value pair can be processed
+    
+    Again using the format! macro to construct a string for each header
+
+    The to_title_case method is available because we imported the TitleCase trait from heck
+    which allows for the transformation of the raw key in the header map into a consistent style
+
+    Expectation is that the value will have a string representation,
+    but in case that fails a “BAD HEADER VALUE” string is used as a replacement
+
+    Do not want to fail the entire response printing
+    if one header value cannot be printed correctly
+    thus unwrap_or provides a way to handle this case
+    
+    The reqwest crate does not treat content length as a normal header value
+    and instead provides a content_length function on the response type to get this value
+
+    content.length() returns an Option, so have to deal with computing a value if the function returns None
+    and that value will be set to the length of the text of the response ergo: resp.text()?.len()
+
+    WHY DOES REQWEST BEHAVE IN THIS WAY?
+
+    Main reason could be because of compression
+
+    The content length of the response is not necessarily the same as the content length
+    that is given in the response header because the actually response body could be compressed
+
+    After decompressing the body, it results in a different length
+
+    The library returns None in this case to signal that if you want to compute an accurate content length,
+    you have to do it yourself
+
+    PUTTING THE HEADERS AND STATUS STRING TOGETHER
+
+    The headers were put into a vector in order to sort by the name of the header
+    Then by using the join method on the string slices
+    able to turn the list of headers into a newline separated string
+
+    As join is not a method on Vec, have to use &headers[..] to get a reference to a slice of type &[String]
+    Then turn the output of that function from String to &str with the extra & at the beginning
+
+    PRINTING OUT THE BODY OF THE RESPONSE
+
+    
 ***/
 
 use structopt::StructOpt;
@@ -207,10 +258,39 @@ fn handle_response(
     mut resp: reqwest::Response
 ) -> HurlResult<()> {
     let status = resp.status();
+
     let mut s = format!(
         "{:?} {} {}\n",
         resp.version(),
         status.as_u16,
         status.canonical_reason().unwrap_or("Unknown")
     );
+
+    let mut headers = Vec::new();
+
+    for(key, value) in resp.headers().iter() {
+        let nice_key = key.as_str().to_title_case().replace(' ', "-");
+
+        headers.push(format!(
+            "{}: {}",
+            nice_key,
+            value.to_str().unwrap_or("BAD HEADER VALUE")
+        ));
+    }
+
+    let result = resp.text()?;
+
+    let content_length = match resp.content.length() {
+        Some(len) => len,
+        None => result.len() as u64,
+    };
+
+    headers.push(format!(
+        "Content-length: {}",
+        content_length
+    ));
+
+    headers.sort();
+    s.push_str(&(&headers[..]).join("\n"));
+    println!("{}", s);
 }
