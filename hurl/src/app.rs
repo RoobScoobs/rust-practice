@@ -145,3 +145,12 @@ pub struct App {
     #[structopt(parse(try_from_str = parse_param))]
     pub parameters: Vec<Parameter>,
 }
+
+impl App {
+    pub fn validate(&mut self) -> HurlResult<()> {
+        if self.cmd.is_none() && self.url.is_none() {
+            return Err(Error::MisingUrlAndCommand);
+        }
+        Ok(())
+    }
+}
