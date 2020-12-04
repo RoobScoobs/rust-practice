@@ -50,6 +50,8 @@
     APP METHODS
 
     Create a validate method to check whether a cmd or url exists
+
+    Add a helper (log_level) to turn the quiet and verbose settings into a string log level for use with the logging implementation
 ***/
 
 use log::{debug, trace};
@@ -152,5 +154,19 @@ impl App {
             return Err(Error::MisingUrlAndCommand);
         }
         Ok(())
+    }
+
+    pub fn log_level(&self) -> Option<&'static str> {
+        if self.quiet || self.verbose <= 0 {
+            return None;
+        }
+
+        match self.verbose {
+            1 => Some("error"),
+            2 => Some("warn"),
+            3 => Some("info"),
+            4 => Some("debug"),
+            _ => Some("trace"),
+        }
     }
 }
