@@ -52,6 +52,18 @@
     Create a validate method to check whether a cmd or url exists
 
     Add a helper (log_level) to turn the quiet and verbose settings into a string log level for use with the logging implementation
+
+    DATA STRUCTURE FOR THE SUBCOMMAND
+
+    Creating an enum to enable the use the name of the enum, which is an HTTP method, as the name of the subcommand
+
+    Each variant has the same inner data which itself derives StructOpt
+
+    The one extra attribute in use here is the rename_all = "screaming_snake_case"
+    Given the attribute the program uses the form:
+        hurl POST whatever.com instead of hurl post whatever.com
+
+    The inner data for each enum variant is a struct to contain the URL and the parameters
 ***/
 
 use log::{debug, trace};
@@ -59,6 +71,27 @@ use std::convert::TryFrom;
 use structopt::StructOpt;
 
 use crate::errors::{Error, HurlResult};
+
+#[derive(StructOpt, Debug)]
+#[structopt(rename_all = "screaming_snake_case")]
+pub enum Method {
+    HEAD(MethodData),
+    GET(MethodData),
+    PUT(MethodData),
+    POST(MethodData),
+    PATCH(MethodData),
+    DELETE(MethodData),
+}
+
+#[derive(StructOpt, Debug)]
+pub struct MethodData {
+    /// The URL to request
+    pub url: String,
+
+    /// The headers, data, and query parameters to add to the request.
+    #[structopt(parse(try_from_str = parse_param))]
+    pub parameters: Vec<Parameter>,
+}
 
 /// A command line HTTP client
 #[derive(StructOpt, Debug)]
