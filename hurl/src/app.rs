@@ -58,12 +58,15 @@
     Creating an enum to enable the use the name of the enum, which is an HTTP method, as the name of the subcommand
 
     Each variant has the same inner data which itself derives StructOpt
+    and a helper method is defined to get the data out of each variant
 
     The one extra attribute in use here is the rename_all = "screaming_snake_case"
     Given the attribute the program uses the form:
         hurl POST whatever.com instead of hurl post whatever.com
 
     The inner data for each enum variant is a struct to contain the URL and the parameters
+
+
 ***/
 
 use log::{debug, trace};
@@ -200,6 +203,21 @@ impl App {
             3 => Some("info"),
             4 => Some("debug"),
             _ => Some("trace"),
+        }
+    }
+}
+
+impl Method {
+    pub fn data(&self) -> &MethodData {
+        use Method::*;
+
+        match self {
+            HEAD(x) => x,
+            GET(x) => x,
+            PUT(x) => x,
+            POST(x) => x,
+            PATCH(x) => x,
+            DELETE(x) => x,
         }
     }
 }
