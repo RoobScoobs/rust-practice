@@ -174,6 +174,17 @@ enum Token<'a> {
     Escape(char),
 }
 
+#[derive(Debug)]
+enum Separator {
+    Colon,
+    Equal,
+    At,
+    ColonEqual,
+    EqualEqual,
+    EqualAt,
+    Snail,
+}
+
 #[derive(StructOpt, Debug)]
 pub struct MethodData {
     /// The URL to request
@@ -306,6 +317,23 @@ impl Method {
             POST(x) => x,
             PATCH(x) => x,
             DELETE(x) => x,
+        }
+    }
+}
+
+impl TryFrom<&str> Separator {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            ":" => Ok(Separator::Colon),
+            "=" => Ok(Separator::Equal),
+            "@" => Ok(Separator::At),
+            ":=" => Ok(Separator::ColonEqual),
+            "==" => Ok(Separator::EqualEqual),
+            "=@" => Ok(Separator::EqualAt),
+            ":=@" => Ok(Separator::Snail),
+            _ => Err(()),
         }
     }
 }
