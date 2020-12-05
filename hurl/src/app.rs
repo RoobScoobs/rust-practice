@@ -66,7 +66,18 @@
 
     The inner data for each enum variant is a struct to contain the URL and the parameters
 
+    ENUM DEFINITIONS
 
+    Parameter type is used to specify the data for the different types of parameters that accept
+    Each one has a particular use case
+
+    Part of this module's aim is to use a parse_param function that will take a string
+    and potentially turn it into a Parameter; thus defining a Token type will help with that
+
+    HELPER FUNCTION TO PARSE STRING INTO A VECTOR OF TOKENS
+
+    There are special separator characters like : and == 
+    however need a form of escaping to allow those to appear in keys and values
 ***/
 
 use log::{debug, trace};
@@ -84,6 +95,51 @@ pub enum Method {
     POST(MethodData),
     PATCH(MethodData),
     DELETE(MethodData),
+}
+
+#[derive(Debug)]
+pub enum Parameter {
+    // :
+    Header {
+        key: String,
+        value: String
+    },
+    // =
+    Data {
+        key: String,
+        value: String
+    },
+    // :=
+    RawJsonData {
+        key: String,
+        value: String
+    },
+    // ==
+    Query {
+        key: String,
+        value: String
+    },
+    // @
+    FormFile {
+        key: String,
+        filename: String
+    },
+    // =@
+    DataFile {
+        key: String,
+        filename: String
+    },
+    // :=@
+    RawJsonDataFile {
+        key: String,
+        filename: String
+    },
+}
+
+#[derive(Debug)]
+enum Token<'a> {
+    Text(&'a str),
+    Escape(char),
 }
 
 #[derive(StructOpt, Debug)]
