@@ -78,6 +78,12 @@
 
     There are special separator characters like : and == 
     however need a form of escaping to allow those to appear in keys and values
+
+    The gather escapes fn uses a pair of indexes into the source string
+    along with possibly some lookahead to tokenize the input
+
+    Basically this is looking for \, =, @, and : following a \ character to indicate that
+    this otherwise special character should be escaped and treated as a literal
 ***/
 
 use log::{debug, trace};
@@ -274,6 +280,52 @@ impl Method {
             POST(x) => x,
             PATCH(x) => x,
             DELETE(x) => x,
+        }
+    }
+}
+
+fn gather_escapes<'a>(src: &'a str) -> Vec<Token<'a>> {
+    let mut tokens = Vec::new();
+    let mut start = 0;
+    let mut end = 0;
+    let mut chars = src.chars();
+
+    loop {
+        let a = chars.next();
+
+        if a.is_none() {
+            if start != end {
+                tokens.push(Token::Text(&src[start..end]));
+            }
+            return tokens;
+        }
+
+        let c = a.unwrap();
+
+        if c != "\\" {
+            end += 1;
+            continue;
+        }
+
+        let b = chars.next();
+
+        if b.is_none() {
+            tokens.push(Token::Text(&src[start..end + 1]))
+            return tokens;
+        }
+
+        let c = b.unwrap();
+
+        match c {
+            '\\' | '=' | '@' | ':' => {
+                if start != end {
+                    tokens.push(Token::Text(&src[start..end]));
+                }
+                tokens.push(Token::Escape(c));
+                end += 2;
+                start = end;
+            }
+            _ => end += 2,
         }
     }
 }
