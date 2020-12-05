@@ -84,6 +84,32 @@
 
     Basically this is looking for \, =, @, and : following a \ character to indicate that
     this otherwise special character should be escaped and treated as a literal
+
+    THE PARSE PARAM FUNCTION
+
+    It will take a string from the command line
+    and attempt to turn it into a Parameter or an appropriate error
+
+    Starts by using the gather_escapes helper function to tokenize the input
+    Then loop over those tokens to look for separators
+
+    Trying to find the earliest and longest separator as some of them have overlap
+
+    The found vector will contain all of the separators that match in the first text segment with a separator
+
+    The index is also stored in the segment where this separator starts
+    If there's anything in the found list can stop looking for more, ergo the break keyword
+
+    If no separators are found, then error out as that is an erroneous state
+
+    Sort the found list by location and then length of the separator
+    Since the vector is not empty can extract the separator for this parameter
+    from the first element in the vector
+
+    Following this piece use the data stored so far to construct a key and value for the particular separator
+
+    Finally use the text value of the separator to get a separator type
+    which we then use to construct the appropriate Parameter
 ***/
 
 use log::{debug, trace};
@@ -327,5 +353,109 @@ fn gather_escapes<'a>(src: &'a str) -> Vec<Token<'a>> {
             }
             _ => end += 2,
         }
+    }
+}
+
+fn parse_param(src: &str) -> HurlResult<Parameter> {
+    debug!("Parsing: {}", src);
+    let separators = [":=@", "=@", "==", ":=", "@", "=", ":"];
+    let tokens = gather_escapes(src);
+
+    let mut found = Vec::new();
+    let mut idx = 0;
+
+    for (i, token) in tokens.iter().enumerate() {
+        match token {
+            Token::Text(s) => {
+                for sep in separators.iter() {
+                    if let Some(n) = s.find(sep) {
+                        found.push((n, sep));
+                    }
+                }
+                if !found.is_empty() {
+                    idx = i;
+                    break;
+                }
+            }
+            Token::Escape(_) => {}
+        }
+    }
+
+    if found.is_empty() {
+        return Err(Error::ParameterMissingSeparator(src.to_owned()));
+    }
+
+    found.sort_by(|(ai, asep), (bi, bsep) | ai.cmp(bi).then(bsep.len().cmp(&asep.len())));
+
+    let sep = found.first().unwrap().1;
+    trace!("Found separator: {}", sep);
+
+    let mut key = String::new();
+    let mut value = String::new();
+
+    for (i, token) in tokens.iter().enumerate() {
+        if i < idx {
+            match token {
+                Token::Text(s) => key.push_str(&s),
+                Token::Escape(c) => {
+                    key.push("\\");
+                    key.push(*c);
+                }
+            }
+        } else if i > idx {
+            match token {
+                Token::Text(s) => value.push_str(&s),
+                Token::Escape(c) => {
+                    value.push('\\');
+                    value.push(*c);
+                }
+            }
+        } else {
+            if let Token::Text(s) = token {
+                let parts: Vec<&str> = s.splitn(2, sep).collect();
+                let k = parts.first().unwrap();
+                let v = parts.last().unwrap();
+
+                key.push_str(k);
+                value.push_str(v);
+            } else {
+                unreachable!();
+            }
+        }
+    }
+
+    if let Ok(separator) = Separator::try_from(*sep) {
+        match separator {
+            Separator::At => Ok(Parameter::FormFile {
+                key,
+                filename: value,
+            }),
+            Separator::Equal => Ok(Parameter::Data {
+                key,
+                value,
+            }),
+            Separator::Colon => Ok(Parameter::Header {
+                key,
+                value
+            }),
+            Separator::ColonEqual => Ok(Parameter::RawJsonData {
+                key,
+                value
+            }),
+            Separator::EqualEqual => Ok(Parameter::Query {
+                key,
+                value
+            }),
+            Separator::EqualAt => Ok(Parameter::DataFile {
+                key,
+                filename: value
+            }),
+            Separator::Snail => Ok(Parameter::RawJsonDataFile {
+                key,
+                filename: value
+            }),
+        }
+    } else {
+        unreachable!();
     }
 }
