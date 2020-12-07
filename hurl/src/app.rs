@@ -351,6 +351,23 @@ impl TryFrom<&str> Separator {
     }
 }
 
+impl Parameter {
+    pub fn is_form_file(&self) -> bool {
+        match *self {
+            Parameter::FormFile { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_data(&self) -> bool {
+        match *self {
+            Parameter::Header { .. } => false,
+            Parameter::Query { .. } => false,
+            _ => true,
+        }
+    }
+}
+
 fn gather_escapes<'a>(src: &'a str) -> Vec<Token<'a>> {
     let mut tokens = Vec::new();
     let mut start = 0;
