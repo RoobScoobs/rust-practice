@@ -37,6 +37,29 @@
     
     The map_err(From::from) bit is so that
     if an error is returned from reqwest it can be turned into a custom error type
+
+    PARSE HELPER
+
+    The parse function will take in the raw URL string
+    and turn it into the Url type exposed by reqwest
+
+    There are two ways to call localhost URLs:
+        - If using the default port of 80 on localhost then the URL as :/some_path can be specified where some_path is optional
+            > In that case the leading colon is stripped off
+              and the rest of the given URL is interpolated into a string which explicitly mentions localhost
+        - If something is placed after the colon which is not a slash
+          then that is interpreted to mean that the localhost port will be specified along with the URL
+          so the raw URL is just appended to localhost
+            > In other words, if a request wants to be made to localhost:8080 can simply use :8080
+
+    If neither of these two scenarios applies, then the given string is parsed directly
+    
+    If that succeeds then it can just be returned; otherwise, a scheme is added to the given URL
+
+    The reqwest Url::parse function requires a scheme so just using example.com would fail to parse
+
+    The App struct has a secure flag for whether to use https by default,
+    so can switch on that value to decide which scheme to try
 ***/
 
 use crate::app::{App, Method, Parameter};
@@ -94,5 +117,24 @@ pub fn perform(
         result
     } else {
         builder.send().map_err(From::from)
+    }
+}
+
+fn parse(app: &App, s: &str) -> Result<Url, reqwest::UrlError> {
+    if s.starts_with(":/") {
+        return Url::parse(&format!("http://localhost{}", &s[1..]));
+    } else if s.starts_with(":") {
+        return Url::parse(&format!("http://localhost{}", s))
+    }
+
+    match Url::parse(s) {
+        Ok(url) => Ok(url),
+        Err(_e) => {
+            if app.secure {
+                Url::parse(&format!("https://{}", s))
+            } else {
+                Url::parse(&format!("http://{}", s))
+            }
+        }
     }
 }
