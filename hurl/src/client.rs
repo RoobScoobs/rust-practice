@@ -60,6 +60,71 @@
 
     The App struct has a secure flag for whether to use https by default,
     so can switch on that value to decide which scheme to try
+
+    HANDLE PARAMETERS HELPER
+
+    The function takes a RequestBuilder and some parameter data and returns a builder or an error
+
+    The mut annotation in front of the builder means
+    to make the builder argument work like a mutable local variable
+
+    This is set because the methods on RequestBuilder consume the receiver
+    i.e. they take self as their first argument rather than &self or &mut self
+    and return a new RequestBuilder
+
+    A HashMap from strings to JSON values is declared
+    and this will be the container for the data that will eventually add to the request
+
+    If the request is a multipart form based on the argumented passed into the function,
+    a Form object is created inside an Option for later use
+
+    This form object is provided by reqwest for exactly this purpose of adding each part of a multipart form to a request
+
+    Then start to loop over the parameters,
+    and within the loop use a big match statement to handle each one individually
+
+    THE MATCH STATEMENT FOR PARAMS
+
+    The header type is straightforward: just call the header method to update the builder
+
+    The Data type is slightly harder insofar as the key and value are inserted into the data map if a multipart form isn't being built
+    otherwise add the key and value to the form using the methods on Form
+
+    As the multipart variable is inside an Option, map is used to operate on the Form type inside
+
+    Adding query string elements is also easy given the query method on the builder
+
+    The RawJsonData type just uses serde to parse the string into a Value before inserting into the data hash map
+
+    DEALING WITH FILES
+
+    First, RawJsonDataFile parses the file into a JSON value using serde
+    and inserts the result into the data map
+
+    Provided by the standard library able to open a handle to a file
+    and build a buffered reader around that handle
+
+    The reader can then be passed directly to the from_reader function
+    This automatically handles all of the complexity of ensuring the file is available,
+    incrementally reading it, ensuring it is closed even if something goes wrong, etc
+
+    DataFile reads a string from filename and inserts that string as a value directly in the hash map
+        *Note*: the read_to_string method is not what you want in many cases dealing with file I/O in Rust, but here it's fine
+    
+    FormFile is simple here due to the file function provided by the Form type
+
+    Calling unwrap on the multipart
+    because the existence of a FormFile parameter is equivalent to is_multipart being true
+    so it is known that multipart must not be None in this branch of the match statement
+
+    Now that all the parameters are added to the hash map structure, they're passed along to the builder
+
+    If the case is that there's a multipart form then use the multipart method on the builder,
+    otherwise either the form or json methods are used depending on whether the is_form flag is passed
+
+    Simply check to ensure that the data is not empty before tyring to serialize it as part of the request
+
+    Finally sans any errors can successfully return the builder
 ***/
 
 use crate::app::{App, Method, Parameter};
@@ -137,4 +202,79 @@ fn parse(app: &App, s: &str) -> Result<Url, reqwest::UrlError> {
             }
         }
     }
+}
+
+fn handle_parameters(
+    mut builder: RequestBuilder,
+    is_form: bool,
+    is_multipart: bool,
+    parameters: &Vec<Parameter>
+) -> HurlResult<RequestBuilder> {
+    let mut data: HashMap<&String, Value> = HashMap::new();
+
+    let mut multipart = if is_multipart {
+        Some(Form::new())
+    } else {
+        None
+    }
+
+    for param in parameters.iter() {
+        match param {
+            Parameter::Header { key, value } => {
+                trace!("Adding header: {}", key);
+                builder = builder.header(key, value);
+            }
+            Parameter::Data { key, value } => {
+                trace!("Adding data: {}", key);
+                if multipart.is_none() {
+                    data.insert(key, Value::String(value.to_owned()));
+                } else {
+                    multipart = multipart.map(|m| m.text(key.to_owned(), value.to_owned()));
+                }
+            }
+            Parameter::Query { key, value } => {
+                trace!("Adding query parameter: {}", key);
+                builder = builder.query(&[(key, value)]);
+            }
+            Parameter::RawJsonData { key, value } => {
+                trace!("Adding JSON data: {}", key);
+                let v: Value = serde_json::from_str(value)?;
+                data.insert(key, v);
+            }
+            Parameter::RawJsonDataFile { key, filename } => {
+                trace!("Adding JSON data for key={} from file={}", key, filename);
+                let file = File::open(filename)?;
+                let reader = BufReader::new(file);
+                let v: Value = serde_json::from_reader(reader)?;
+                data.insert(key, v);
+            }
+            Parameter::DataFile { key, filename } => {
+                trace!("Adding data from file={} for key={}", filename, key);
+                let value = std::fs::read_to_string(filename)?;
+                data.insert(key, Value::String(value));
+            }
+            Parameter::FormFile { key, filename } => {
+                trace!("Adding file={} with key={}", filename, key);
+                multipart = Some(
+                    multipart
+                        .unwrap()
+                        .file(key.to_owned(), filename.to_owned())?,
+                );
+            }
+        }
+    }
+
+    if let Some(m) = multipart {
+        builder = builder.multipart(m);
+    } else {
+        if !data.is_empty() {
+            if is_form {
+                builder = builder.form(&data);
+            } else {
+                builder = builder.json(&data);
+            }
+        }
+    }
+
+    Ok(builder)
 }
