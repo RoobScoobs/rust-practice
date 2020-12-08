@@ -96,7 +96,7 @@
 
     The RawJsonData type just uses serde to parse the string into a Value before inserting into the data hash map
 
-    DEALING WITH FILES
+    HANDLING FILES
 
     First, RawJsonDataFile parses the file into a JSON value using serde
     and inserts the result into the data map
@@ -125,6 +125,15 @@
     Simply check to ensure that the data is not empty before tyring to serialize it as part of the request
 
     Finally sans any errors can successfully return the builder
+
+    HANDLING AUTHENTICATION
+
+    handle_auth is the helper responsible for modifying the builder to add the relevant data
+
+    If there is no auth string or token then simply return the builder unchanged
+    Otherwise use the basic_auth or bearer_auth methods on the builder to add the particular pieces of auth information
+
+    The basic auth path makes use of another helper called parse_auth to get the username and password
 ***/
 
 use crate::app::{App, Method, Parameter};
@@ -274,6 +283,25 @@ fn handle_parameters(
                 builder = builder.json(&data);
             }
         }
+    }
+
+    Ok(builder)
+}
+
+fn handle_auth(
+    mut builder: RequestBuilder,
+    auth: &Option<String>,
+    token: &Option<String>
+) -> HurlResult<RequestBuilder> {
+    if let Some(auth_string) = auth {
+        let (username, maybe_password) = parse_auth(&auth_string)?;
+        trace!("Parsed basic authentication. Username={}", username);
+        builder = builder.basic_auth(username, maybe_password);
+    }
+
+    if let Some(bearer) = token {
+        trace!("Parsed bearer authentication. Token={}", bearer);
+        builder = builder.bearer_auth(bearer);
     }
 
     Ok(builder)
