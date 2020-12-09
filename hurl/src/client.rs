@@ -134,6 +134,14 @@
     Otherwise use the basic_auth or bearer_auth methods on the builder to add the particular pieces of auth information
 
     The basic auth path makes use of another helper called parse_auth to get the username and password
+
+    The app accpets the forms myUserName, myUserName:, and myUserName:myPassword as basic auth strings
+
+    The first form without a colon assumes that the username was put in and user wants to type in their password
+
+    Using the rpassword crate which provides the read_password_from_tty method asks the user to enter a password
+    This captures that value and returns it as a string without echoing the user input
+
 ***/
 
 use crate::app::{App, Method, Parameter};
@@ -181,7 +189,7 @@ pub fn perform(
 
     let mut builder = client.request(method, url);
     builder = handle_parameters(builder, app.form, is_multipart, parameters)?;
-    builder = handle_auth(builder, &app.path, &app.token)?;
+    builder = handle_auth(builder, &app.auth, &app.token)?;
 
     if log_enabled!(log::Level::Info) {
         let start = Instant::now();
@@ -305,4 +313,20 @@ fn handle_auth(
     }
 
     Ok(builder)
+}
+
+fn parse_auth(s: &str) -> HurlResult<(String, Option<String>)> {
+    if let Some(idx) = s.find(':') {
+        let (username, password_with_colon) = s.split_at(idx);
+        let password = password_with_colon.trim_start_matches(':');
+
+        if password.is_empty() {
+            return Ok((username.to_owned(), None));
+        } else {
+            return Ok((username.to_owned(), Some(password.to_owned())));
+        }
+    } else {
+        let password = rpassword::read_password_from_tty(Some("Password: "))?;
+        return Ok((s.to_owned(), Some(password)));
+    }
 }
