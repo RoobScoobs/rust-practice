@@ -142,6 +142,9 @@
     Using the rpassword crate which provides the read_password_from_tty method asks the user to enter a password
     This captures that value and returns it as a string without echoing the user input
 
+    The other two cases with colons mean that the user is giving a password and the app doesn't prompt the user to enter one
+    In the first case - myUserName: - it's saying that no password will be provided
+
 ***/
 
 use crate::app::{App, Method, Parameter};
@@ -149,6 +152,7 @@ use crate::errors::{Error, HurlResult};
 use log::{info, debug, trace, log_enabled, self};
 use reqwest::multipart::Form;
 use reqwest::{Client, RequestBuilder, Response, Url};
+use rpassword;
 use serde_json::Value;
 use std::collection::HashMap;
 use std::fs::File;
