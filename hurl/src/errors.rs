@@ -9,6 +9,8 @@
     thus it's worthwhile to do
 
     Importing std::fmt to make our Display implementation easier to write
+
+    Then implement Debug directly to be the same as Display
 ***/
 
 use std::fmt;
@@ -62,5 +64,11 @@ impl fmt::Display for Error {
                 write!(f, "URL Parsing Error: {}", e)
             }
         }
+    }
+}
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
