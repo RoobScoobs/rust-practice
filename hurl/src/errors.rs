@@ -11,6 +11,18 @@
     Importing std::fmt to make our Display implementation easier to write
 
     Then implement Debug directly to be the same as Display
+    This mainly serves the purpose of getting the nice error message in some contexts
+    which do a debug print by default where there is a lack of control
+
+    The following crates provide some interesting features around errors:
+        - error-chain
+        - failure
+        - context-attribute
+        - err-derive
+        - snafu
+        - fehler
+        - anyhow
+        - thiserror
 ***/
 
 use std::fmt;
@@ -70,5 +82,14 @@ impl fmt::Display for Error {
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+impl std::error::Error for Error {
+    fn srouce(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::UrlParseError(e) => Some(e),
+            _ => None,
+        }
     }
 }
