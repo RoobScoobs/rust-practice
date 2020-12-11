@@ -23,6 +23,15 @@
         - fehler
         - anyhow
         - thiserror
+
+    Last piece is to provide implementations of the From trait for errors
+    from other libraries that will be wrapped in the custom enum
+
+    There are four that are relevant:
+        - reqwest::Error
+        - serde_json::error::Error
+        - std::io::Error (dealing with file system errors)
+        - reqwest::UrlError (URL parsing)
 ***/
 
 use std::fmt;
@@ -86,10 +95,50 @@ impl fmt::Debug for Error {
 }
 
 impl std::error::Error for Error {
-    fn srouce(&self) -> Option<&(dyn std::error::Error + 'static)> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::UrlParseError(e) => Some(e),
             _ => None,
         }
+    }
+}
+
+impl From<reqwest::Error> for Error {
+    #[inline]
+    fn from(err: reqwest::Error) -> Error {
+        if err.is_serialization() {
+            return Error::ClientSerialization;
+        }
+
+        if err.is_timeout() {
+            return Error::ClientTimeout;
+        }
+
+        if let Some(s) = err.status() {
+            return Error::ClientWithStatus(s);
+        }
+
+        Error::ClientOther
+    }
+}
+
+impl From<serde_json::error::Error> for Error {
+    #[inline]
+    fn from(err: serde_json::error::Error) -> Error {
+        Error::SerdeJson(err.classify())
+    }
+}
+
+impl From<std::io::Error> for Error {
+    #[inline]
+    fn from(err: std::io::Error) -> Error {
+        Error::IO(err.kind())
+    }
+}
+
+impl From<reqwest::UrlError> for Error {
+    #[inline]
+    fn from(err: reqwest::UrlError) -> Error {
+        Error::UrlParseError(err)
     }
 }
