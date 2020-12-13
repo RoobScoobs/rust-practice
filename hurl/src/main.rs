@@ -214,6 +214,11 @@
     The actual representation of the JSON will be ordered by the keys if it is correctly parsed
     This is because of the type alias for OrderedJson telling serde that it should use a BTreeMap
     as the container for the top level JSON object
+
+    ADDING CONFIGURATION TO THE APP
+
+    Calling process_config_file after parsing and validating the command line arguments
+    will get the configuration data incorporated into the app
 ***/
 
 use structopt::StructOpt;
@@ -222,6 +227,8 @@ use log::trace;
 
 mod app;
 mod client;
+mod config;
+mod directories;
 mod errors;
 
 use errors::HurlResult;
@@ -231,6 +238,7 @@ type OrderedJson = std::collections::BTreeMap<String, serde_json::Value>;
 fn main() -> HurlResult<()> {
     let mut app = app::App::from_args();
     app.validate()?;
+    app.process_config_file();
 
     if let Some(level) = app.log_level() {
         std::env::set_var("RUST_LOG", format!("hurl={}", level));

@@ -124,6 +124,11 @@
     
     The parse(from_os_str) attribute to get the PathBuf is something that is builtin to structopt
     as this is a very common need
+
+    Within the process_config_file use helper functions from the config module to get the path
+    and read the file if a path exists
+
+    Then use the resulting data structure, if able to find and parse one, to update the App struct
 ***/
 
 use log::{debug, trace};
@@ -335,6 +340,39 @@ impl App {
             3 => Some("info"),
             4 => Some("debug"),
             _ => Some("trace"),
+        }
+    }
+
+    pub fn process_config_file(&mut self) {
+        let config_path = config::config_file(self);
+        let config_opt = config::read_config_file(config_path);
+        
+        if let Some(mut config) = config_opt {
+            if self.verbose == 0 {
+                if let Some(v) = config.verbose {
+                    self.verbose = v;
+                }
+            }
+
+            if !self.form {
+                if let Some(f) = config.form {
+                    self.form = f;
+                }
+            }
+
+            if !self.secure {
+                if let Some(s) = config.secure {
+                    self.secure = s;
+                }
+            }
+
+            if self.auth.is_none() {
+                self.auth = config.auth.take();
+            }
+
+            if self.token.is_none() {
+                self.token = config.token.take();
+            }
         }
     }
 }
