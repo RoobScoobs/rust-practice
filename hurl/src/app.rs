@@ -110,12 +110,28 @@
 
     Finally use the text value of the separator to get a separator type
     which we then use to construct the appropriate Parameter
+
+    ADDING CONFIGURATION TO THE APP
+
+    Bringing in PathBuf for working with file system paths
+
+    The location of the configuration file is something that can optionally be further configured
+    hence the added config field to the App struct, which takes a path to look for the file
+
+    The new structopt attribute here is env = "HURL_CONFIG"
+    which allows the user to set the location of the configuration file via the HURL_CONFIG environment variable
+    in addition to the ability to pass it as a command line argument
+    
+    The parse(from_os_str) attribute to get the PathBuf is something that is builtin to structopt
+    as this is a very common need
 ***/
 
 use log::{debug, trace};
 use std::convert::TryFrom;
+use std::path::PathBuf;
 use structopt::StructOpt;
 
+use crate::config;
 use crate::errors::{Error, HurlResult};
 
 #[derive(StructOpt, Debug)]
@@ -281,6 +297,23 @@ pub struct App {
     ///   e.g. foo:=@bar.json becomes {"foo": {"bar": "this is from bar.json"}}
     #[structopt(parse(try_from_str = parse_param))]
     pub parameters: Vec<Parameter>,
+
+    /// Configuration file
+    /// 
+    /// A TOML file which is stored by default at HOME/.config/hurl/config
+    /// where HOME is platform dependent.
+    /// 
+    /// The file supports the following optional keys with the given types:
+    /// verbose: u8
+    /// form: bool
+    /// auth: string
+    /// token: string
+    /// secure: bool
+    /// 
+    /// Each option has the same meaning as the corresponding configuration option with the same name.
+    /// The verbose setting is a number from 0 - meaning no logging - to 5 - meaning maximal log output
+    #[structopt(short, long, env = "HURL_CONFIG", parse(from_os_str))]
+    pub config: Option<PathBuf>,
 }
 
 impl App {
