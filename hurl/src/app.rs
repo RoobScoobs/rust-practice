@@ -144,6 +144,12 @@
 
     Finally, the read_only field determines whether the session should be modified by the request and response
     or if it should only be used to augment the request as it currently exists on disk
+
+    The host method makes use of a helper function make_safe_pathname from the sessions module
+    and this is a simple way to get some string representation of the URL that's used to make requests to
+
+    Sessions are unique based on this host value and the configured named
+
 ***/
 
 use log::{debug, trace};
@@ -153,6 +159,7 @@ use structopt::StructOpt;
 
 use crate::config;
 use crate::errors::{Error, HurlResult};
+use crate::session::make_safe_pathname;
 
 #[derive(StructOpt, Debug)]
 #[structopt(rename_all = "screaming_snake_case")]
@@ -401,6 +408,16 @@ impl App {
             if self.token.is_none() {
                 self.token = config.token.take();
             }
+        }
+    }
+
+    pub fn host(&self) -> String {
+        if let Some(url) = &self.url {
+            make_safe_pathname(url)
+        } else if let Some(cmd) = &self.cmd {
+            make_safe_pathname(&cmd.data().url)
+        } else {
+            unreachable!();
         }
     }
 }
