@@ -219,6 +219,28 @@
 
     Calling process_config_file after parsing and validating the command line arguments
     will get the configuration data incorporated into the app
+
+    ADDING SESSION
+
+    Before matching on the cmd argument, try to obtain a session
+    The session variable here has type Option<Session>
+
+    There will be a type of session field on the app which is optional
+    and if it exists then that will be turned into a Session
+
+    Adding the app annd session to the handle_response function as the response
+    might update the session
+
+    Inside the function, before returning, include some logic to check
+    whether the session is not read only and the session exists, 
+    in which case the session is updated from the response and saved
+
+    While changing the handle_response, also want to change the calls to perform_method
+    and perform as they will also take in the session
+    
+    Passing a mutable reference to the perform functions
+    because the session is needed to possibly fill in data in the request
+    and the session will be filled in with other data provided as part of the request as parameters 
 ***/
 
 use structopt::StructOpt;
@@ -230,6 +252,7 @@ mod client;
 mod config;
 mod directories;
 mod errors;
+mod session;
 
 use errors::HurlResult;
 
@@ -245,9 +268,14 @@ fn main() -> HurlResult<()> {
         pretty_env_logger::init();
     }
 
+    let mut session = app
+        .session
+        .as_ref()
+        .map(|name| session::Session::get_or_create(&app, name.clone(), app.host()));
+
     match app.cmd {
         Some(ref method) => {
-            let resp = client::perform_method(&app, method)?;
+            let resp = client::perform_method(&app, method, &mut session)?;
             handle_response(resp)
         }
         None => {
@@ -260,15 +288,17 @@ fn main() -> HurlResult<()> {
                 reqwest::Method::GET
             };
 
-            let resp = client::perform(&app, method, &url, &app.parameters)?;
+            let resp = client::perform(&app, method, &mut session, &url, &app.parameters)?;
 
-            handle_response(resp)
+            handle_response(&app, resp, &mut session)
         }
     }
 }
 
 fn handle_response(
-    mut resp: reqwest::Response
+    app: &app::App,
+    mut resp: reqwest::Response,
+    session: &mut Option<session::Session>
 ) -> HurlResult<()> {
     let status = resp.status();
 
@@ -318,6 +348,13 @@ fn handle_response(
         Err(e) => {
             trace!("Failed to parse result to JSON: {}", e);
             println!("{}", result);
+        }
+    }
+
+    if !app.read_only {
+        if let Some(s) = session {
+            s.update_with_response(&resp);
+            s.save(app)?;
         }
     }
 
