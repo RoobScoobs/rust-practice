@@ -145,10 +145,30 @@
     The other two cases with colons mean that the user is giving a password and the app doesn't prompt the user to enter one
     In the first case - myUserName: - it's saying that no password will be provided
 
+    ADDING SESSIONS TO THE CLIENT
+
+    The client is responsible for actually making the network request
+    The session will be part of building up the request
+
+    The function handle_session modifies the request builder from the session
+    and possibly the session based on other data available
+
+    handle_session mostly delegates to methods on the session module: 
+        - add_to_request
+        - update_with_parameters
+        - update_auth
+    
+    Essentially, if there is a session,
+    then the builder is updated by adding the session data to the request
+
+    Furthermore, if it's not in read only mode which means the session is to be updated,
+    then the parameters and authentication information are passed to the session for updating
+
 ***/
 
 use crate::app::{App, Method, Parameter};
 use crate::errors::{Error, HurlResult};
+use crate::session::Session;
 use log::{info, debug, trace, log_enabled, self};
 use reqwest::multipart::Form;
 use reqwest::{Client, RequestBuilder, Response, Url};
@@ -161,13 +181,15 @@ use std::time::Instant;
 
 pub fn perform_method(
     app: &App,
-    method: &Method
+    method: &Method,
+    session: &mut Option<Session>
 ) -> HurlResult<Response> {
     let method_data = method.data();
 
     perform(
         app,
         method.into(),
+        session,
         &method_data.url,
         &method_data.parameters
     )
@@ -176,6 +198,7 @@ pub fn perform_method(
 pub fn perform(
     app: &App,
     method: reqwest::Method,
+    session: &mut Option<Session>,
     raw_url: &str,
     parameters: &Vec<Parameter>
 ) -> HurlResult<Response> {
@@ -184,6 +207,7 @@ pub fn perform(
     debug!("Parsed url: {}", url);
 
     let is_multipart = parameters.iter().any(|p| p.is_form_file());
+
     if is_multipart {
         trace!("Making multipart request because form file was given");
         if !app.form {
@@ -192,6 +216,15 @@ pub fn perform(
     }
 
     let mut builder = client.request(method, url);
+
+    builder = handle_session(
+        builder,
+        session,
+        parameters,
+        !app.read_only,
+        &app.auth,
+        &app.token
+    );
     builder = handle_parameters(builder, app.form, is_multipart, parameters)?;
     builder = handle_auth(builder, &app.auth, &app.token)?;
 
@@ -333,4 +366,26 @@ fn parse_auth(s: &str) -> HurlResult<(String, Option<String>)> {
         let password = rpassword::read_password_from_tty(Some("Password: "))?;
         return Ok((s.to_owned(), Some(password)));
     }
+}
+
+fn handle_session(
+    mut builder: RequestBuilder,
+    session: &mut Option<Session>,
+    parameters: &Vec<Parameter>,
+    update_session: bool,
+    auth: &Option<String>,
+    token: &Option<String>
+) -> RequestBuilder {
+    if let Some(s) = session {
+        trace!("Adding session data to request");
+        builder = s.add_to_request(builder);
+        
+        if update_session {
+            trace!("Updating session with parameters from this request");
+            s.update_with_parameters(parameters);
+            s.update_auth(auth, token)
+        }
+    }
+
+    builder
 }
