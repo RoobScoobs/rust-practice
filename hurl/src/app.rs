@@ -129,6 +129,21 @@
     and read the file if a path exists
 
     Then use the resulting data structure, if able to find and parse one, to update the App struct
+
+    SUPPORTING SESSIONS IN THE APP MODULE
+
+    Because the app module is responsible for command line argument based configuration
+    the responsibility here is to add the fields to the App struct necessary for configuring the session
+
+    The session field is a name to use for a particular session
+    Specifying the same name is how sessions get reused across requests
+
+    The app also provides the ability to specify where the session data should be stored
+    By default things are placed in the configuration directory for convenience,
+    but the user has the option to put it somewhere else
+
+    Finally, the read_only field determines whether the session should be modified by the request and response
+    or if it should only be used to augment the request as it currently exists on disk
 ***/
 
 use log::{debug, trace};
@@ -319,6 +334,19 @@ pub struct App {
     /// The verbose setting is a number from 0 - meaning no logging - to 5 - meaning maximal log output
     #[structopt(short, long, env = "HURL_CONFIG", parse(from_os_str))]
     pub config: Option<PathBuf>,
+
+    /// Session name
+    #[structop(long)]
+    pub session: Option<String>,
+
+    /// Session storage
+    #[structopt(long, parse(from_os_str))]
+    pub session_dir: Option<PathBuf>,
+
+    /// If true then use the stored session to augment the request,
+    /// but do not modify what is stored.
+    #[structopt(long)]
+    pub read_only: bool,
 }
 
 impl App {
