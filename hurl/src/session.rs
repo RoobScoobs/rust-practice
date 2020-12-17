@@ -89,7 +89,8 @@
     The only part of the response that is to be absorbed into the session is the cookies,
     so update_with_response comes in to update the session accordingly
 
-    
+    The make_safe_pathname helps turn a string into something that is safe for storing on the file system
+    This is just one example of a scheme that works but can be something else
 ***/
 
 use crate::app::{App, Parameter};
@@ -111,7 +112,7 @@ pub struct Session {
     auth: Option<String>,
     token: Option<String>,
     headers: HashMap<String, String>,
-    cookies: Vec<(String, String),
+    cookies: Vec<(String, String)>,
 }
 
 impl Session {
@@ -183,7 +184,7 @@ impl Session {
                 Parameter::Header { key, value } => {
                     let lower_key = key.to_ascii_lowercase();
 
-                    if lower_key.starts_with("content-") || lowerkey.starts_with("if-") {
+                    if lower_key.starts_with("content-") || lower_key.starts_with("if-") {
                         continue;
                     }
 
@@ -221,4 +222,25 @@ impl Session {
 
         builder.header(COOKIE, cookies)
     }
+
+    pub fn update_with_response(&mut self, resp: &reqwest::Response) {
+        for cookie in resp.cookies() {
+            self.cookies
+                .push((cookie.name().to_owned(), cookie.value().to_owned()));
+        }
+    }
+}
+
+
+pub fn make_safe_pathname(s: &str) -> String {
+    let mut buf = String::with_capacity(s.len());
+
+    for c in s.chars() {
+        match c {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '-' | ' ' => buf.push(c),
+            _ => buf.push('_'),
+        }
+    }
+
+    buf
 }
