@@ -52,6 +52,44 @@
     SAVING A SESSION
 
     The session needs to be able to save itself to disk, hence the save method
+
+    Start by ensuring the directory where the file to store exists
+
+    The function create_all_dir is effectively mkdir -p which creates all intermediate directories as needed
+
+    Then the file is opened at the specified path and the data structure is serialized to disk as JSON
+
+    The OpenOptions builder is used to specify exactly how to open the file
+    
+    Aim is to have the file on disk to represent the current struct
+    that's being written in both cases where the file does and does not exist
+
+    The create function is needed for the does not exist case,
+    and the truncate function is needed to properly handle all cases when the file does exist
+
+    UPDATING THE SESSION FROM REQUEST PARAMETERS
+
+    The Parameter::Header is the only parameter to care about
+    because the app only supports headers as a parameter that is stored in the session
+
+    Headers are stored in the headers field on the session, but a few keys are excluded
+    as persisting them across request is a no-no
+
+    Next, if auth data is available, the session needs to be updated
+
+    The add_to_request method is as the name implies adding the session to the request
+
+    It starts by adding headers to the request, if there are any
+    Further, if there are cookies, 
+    turn them into the expected format for the cookie header and add that to the request
+
+    The format of the cookie header is given by the HTTP specification
+    and the key for the cookie header is provided by reqwest as the constant COOKIE
+
+    The only part of the response that is to be absorbed into the session is the cookies,
+    so update_with_response comes in to update the session accordingly
+
+    
 ***/
 
 use crate::app::{App, Parameter};
@@ -124,5 +162,63 @@ impl Session {
         session_dir
     }
 
-    pub fn save(&self, app: &App) -> HurlResult<()> {}
+    pub fn save(&self, app: &App) -> HurlResult<()> {
+        let dir = Session::dir(app, &self.host);
+        create_dir_all(dir)?;
+
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&self.path)?;
+
+        let writer = BufWriter::new(file);
+
+        serde_json::to_writer(writer, &self).map_err(|e| e.into())
+    }
+
+    pub fn update_with_parameters(&mut self, parameters: &Vec<Parameter>) {
+        for parameter in parameters.iter() {
+            match parameter {
+                Parameter::Header { key, value } => {
+                    let lower_key = key.to_ascii_lowercase();
+
+                    if lower_key.starts_with("content-") || lowerkey.starts_with("if-") {
+                        continue;
+                    }
+
+                    self.headers.insert(key.clone(), value.clone());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    pub fn update_auth(&mut self, auth: &Option<String>, token: &Option<String>) {
+        if auth.is_some() {
+            self.auth = auth.clone();
+        }
+
+        if token.is_some() {
+            self.token = token.clone();
+        }
+    }
+
+    pub fn add_to_request(&self, mut builder: RequestBuilder) -> RequestBuilder {
+        for (key, value) in self.headers.iter() {
+            builder = builder.header(key, value);
+        }
+        let cookies = self
+            .cookies
+            .iter()
+            .map(|(name, value)| format!("{}={}", name, value))
+            .collect::<Vec<String>>()
+            .join("; ");
+
+        if cookies.is_empty() {
+            return builder;
+        }
+
+        builder.header(COOKIE, cookies)
+    }
 }
