@@ -63,25 +63,25 @@ impl fmt::Display for Error {
             Error::NotFormButHasFormFile => {
                 write!(f, "Cannot have a form file 'key@filename' unless --form option is set" )
             }
-            Error:ClientSerialization => {
+            Error::ClientSerialization => {
                 write!(f, "Serializing the request/response failed")
             }
-            Error:ClientTimeout => {
+            Error::ClientTimeout => {
                 write!(f, "Timeout during request")
             }
-            Error:ClientWithStatus(status) => {
+            Error::ClientWithStatus(status) => {
                 write!(f, "Got status code: {}", status)
             }
-            Error:ClientTimeout => {
+            Error::ClientOther => {
                 write!(f, "Unknown client error")
             }
-            Error:SerdeJson(c) => {
+            Error::SerdeJson(c) => {
                 write!(f, "JSON error: {:?}", c)
             }
-            Error:IO(k) => {
+            Error::IO(k) => {
                 write!(f, "IO Error: {:?}", k)
             }
-            Error:UrlParseError(e) => {
+            Error::UrlParseError(e) => {
                 write!(f, "URL Parsing Error: {}", e)
             }
         }

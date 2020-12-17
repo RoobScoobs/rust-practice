@@ -174,7 +174,7 @@ use reqwest::multipart::Form;
 use reqwest::{Client, RequestBuilder, Response, Url};
 use rpassword;
 use serde_json::Value;
-use std::collection::HashMap;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::time::Instant;
@@ -270,7 +270,7 @@ fn handle_parameters(
         Some(Form::new())
     } else {
         None
-    }
+    };
 
     for param in parameters.iter() {
         match param {

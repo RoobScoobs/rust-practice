@@ -276,7 +276,7 @@ fn main() -> HurlResult<()> {
     match app.cmd {
         Some(ref method) => {
             let resp = client::perform_method(&app, method, &mut session)?;
-            handle_response(resp)
+            handle_response(&app, resp, &mut session)
         }
         None => {
             let url = app.url.take().unwrap();
@@ -305,7 +305,7 @@ fn handle_response(
     let mut s = format!(
         "{:?} {} {}\n",
         resp.version(),
-        status.as_u16,
+        status.as_u16(),
         status.canonical_reason().unwrap_or("Unknown")
     );
 
@@ -323,7 +323,7 @@ fn handle_response(
 
     let result = resp.text()?;
 
-    let content_length = match resp.content.length() {
+    let content_length = match resp.content_length() {
         Some(len) => len,
         None => result.len() as u64,
     };

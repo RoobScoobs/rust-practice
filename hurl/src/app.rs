@@ -240,7 +240,7 @@ pub struct MethodData {
 
 /// A command line HTTP client
 #[derive(StructOpt, Debug)]
-#[structopt(name = "hurl"))]
+#[structopt(name = "hurl")]
 pub struct App {
     /// Activate quiet mode
     /// 
@@ -343,7 +343,7 @@ pub struct App {
     pub config: Option<PathBuf>,
 
     /// Session name
-    #[structop(long)]
+    #[structopt(long)]
     pub session: Option<String>,
 
     /// Session storage
@@ -359,7 +359,7 @@ pub struct App {
 impl App {
     pub fn validate(&mut self) -> HurlResult<()> {
         if self.cmd.is_none() && self.url.is_none() {
-            return Err(Error::MisingUrlAndCommand);
+            return Err(Error::MissingUrlAndCommand);
         }
         Ok(())
     }
@@ -450,7 +450,7 @@ impl From<&Method> for reqwest::Method {
     }
 }
 
-impl TryFrom<&str> Separator {
+impl TryFrom<&str> for Separator {
     type Error = ();
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -502,7 +502,7 @@ fn gather_escapes<'a>(src: &'a str) -> Vec<Token<'a>> {
 
         let c = a.unwrap();
 
-        if c != "\\" {
+        if c != '\\' {
             end += 1;
             continue;
         }
@@ -510,7 +510,7 @@ fn gather_escapes<'a>(src: &'a str) -> Vec<Token<'a>> {
         let b = chars.next();
 
         if b.is_none() {
-            tokens.push(Token::Text(&src[start..end + 1]))
+            tokens.push(Token::Text(&src[start..end + 1]));
             return tokens;
         }
 
@@ -572,7 +572,7 @@ fn parse_param(src: &str) -> HurlResult<Parameter> {
             match token {
                 Token::Text(s) => key.push_str(&s),
                 Token::Escape(c) => {
-                    key.push("\\");
+                    key.push('\\');
                     key.push(*c);
                 }
             }
