@@ -240,12 +240,25 @@
     
     Passing a mutable reference to the perform functions
     because the session is needed to possibly fill in data in the request
-    and the session will be filled in with other data provided as part of the request as parameters 
+    and the session will be filled in with other data provided as part of the request as parameters
+
+    ADDING SYNTAX HIGHLIGHTING
+    
+    The syntect dependency is added to for a bit of polish to the application
+
+    A SyntaxSet is a set of grammatical syntaxes which can be highlighted
+    almost thinking of it like a way to go from raw text to structured text
+
+    A theme is a description of what colors to apply based on the annotations in that structured text
+
+    The solarized dark theme is included by default by the syntect crate
 ***/
 
-use structopt::StructOpt;
 use heck::TitleCase;
 use log::trace;
+use structopt::StructOpt;
+use syntect::highlighting::Theme;
+use syntect::parsing::SyntaxSet;
 
 mod app;
 mod client;
@@ -253,6 +266,7 @@ mod config;
 mod directories;
 mod errors;
 mod session;
+mod syntax;
 
 use errors::HurlResult;
 
@@ -267,6 +281,9 @@ fn main() -> HurlResult<()> {
         std::env::set_var("RUST_LOG", format!("hurl={}", level));
         pretty_env_logger::init();
     }
+
+    let (ss, ts) = syntax::build()?;
+    let theme = &ts.themes["Solarized (dark)"];
 
     let mut session = app
         .session
