@@ -252,6 +252,33 @@
     A theme is a description of what colors to apply based on the annotations in that structured text
 
     The solarized dark theme is included by default by the syntect crate
+
+    The response is to be highlighted, so need to add the syntax set and theme to handle_response
+    Instead of calling println!, going to call highlight_string which will still print the string but with colors
+
+    However still need to call println!("") to add a newline between the header content and the body
+
+    If the body is parsed as JSON - the Ok branch in the match statement - then replace the print call again with highlight_string
+
+    The syntect crate provides an incredible amount of intricate customizations and details for syntax highlighting,
+    but it also provides some easy convenience methods when there's no need to get too deep into the details
+
+    There are two different syntaxes used "JSON" and "HTTP"
+    and those are passed as the syntax argument to the highlight_string function
+    so the right syntax can easily be looked up from the syntax set
+
+    Using this syntax and theme to construct a HighlightLines object
+    which is used to generate text in colored regions for printing
+
+    The as_24_bit_terminal escaped method is a utility for turning the colored regions
+    into escape sequences for use in terminal output
+
+    The LinesWithEndings will add newlines if they don't exist so
+    print! instead of println! can be used and still get newlines at the end of the lines
+
+    Finally, print out the terminal reset character which ends all highlighting
+    and puts the user back into normal shell mode,
+    so that the highlighting isn't leaked onto later shell commands
 ***/
 
 use heck::TitleCase;
@@ -293,7 +320,7 @@ fn main() -> HurlResult<()> {
     match app.cmd {
         Some(ref method) => {
             let resp = client::perform_method(&app, method, &mut session)?;
-            handle_response(&app, resp, &mut session)
+            handle_response(&app, &ss, theme, resp, &mut session)
         }
         None => {
             let url = app.url.take().unwrap();
@@ -307,13 +334,15 @@ fn main() -> HurlResult<()> {
 
             let resp = client::perform(&app, method, &mut session, &url, &app.parameters)?;
 
-            handle_response(&app, resp, &mut session)
+            handle_response(&app, &ss, theme, resp, &mut session)
         }
     }
 }
 
 fn handle_response(
     app: &app::App,
+    ss: &SyntaxSet,
+    theme: &Theme,
     mut resp: reqwest::Response,
     session: &mut Option<session::Session>
 ) -> HurlResult<()> {
@@ -352,7 +381,9 @@ fn handle_response(
 
     headers.sort();
     s.push_str(&(&headers[..]).join("\n"));
-    println!("{}", s);
+    highlight_string(ss, theme, "HTTP", &s);
+
+    println!("");
 
     let result_json: serde_json::Result<OrderedJson> = serde_json::from_str(&result);
 
@@ -360,7 +391,7 @@ fn handle_response(
         Ok(result_value) => {
             let result_str = serde_json::to_string_pretty(&result_value)?;
 
-            println!("{}", result_str);
+            highlight_string(ss, theme, "JSON", &result_str);
         }
         Err(e) => {
             trace!("Failed to parse result to JSON: {}", e);
@@ -376,4 +407,22 @@ fn handle_response(
     }
 
     Ok(())
+}
+
+fn highlight_string(ss: &SyntaxSet, theme: &Theme, syntax: &str, string: &str) {
+    use syntect::easy::HighlightLines;
+    use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
+
+    let syn = ss
+        .find_syntax_by_name(syntax)
+        .expect(&format!("{} syntax should exist", syntax));
+
+    let mut h = HighlightLines::new(syn, theme);
+
+    for line in LinesWithEndings::from(string) {
+        let regions = h.highlight(line, &ss);
+        print!("{}", as_24_bit_terminal_escaped(&regions[..], false));
+    }
+
+    println!("\x1b[0m");
 }
