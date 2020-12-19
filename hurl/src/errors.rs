@@ -32,6 +32,9 @@
         - serde_json::error::Error
         - std::io::Error (dealing with file system errors)
         - reqwest::UrlError (URL parsing)
+
+    To handle load failure of syntax definitions add a variant to the error enum
+    and support for printing the error
 ***/
 
 use std::fmt;
@@ -47,6 +50,7 @@ pub enum Error {
     SerdeJson(serde_json::error::Category),
     IO(std::io::ErrorKind),
     UrlParseError(reqwest::UrlError),
+    SyntaxLoadError(&'static str),
 }
 
 pub type HurlResult<T> = Result<T, Error>;
@@ -83,6 +87,9 @@ impl fmt::Display for Error {
             }
             Error::UrlParseError(e) => {
                 write!(f, "URL Parsing Error: {}", e)
+            }
+            Error::SyntaxLoadError(typ) => {
+                write!(f, "Error loading syntax for {}", typ)
             }
         }
     }
