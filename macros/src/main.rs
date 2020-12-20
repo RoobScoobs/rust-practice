@@ -180,6 +180,35 @@
 
     This means that gen_object takes all of the subsequent syntax as input
     and generates new code to replace it
+
+    WRITING A CUSTOM DERIVE
+
+    The builder pattern is one of the classic "Gang of Four" design patterns
+    that is typically thought of in the context of object-oriented code
+
+    The pattern separates construction from the actual representation of an object
+
+    So instead of writing:
+        struct Item {
+            a: u32,
+            b: Option<&'static str>,
+            c: String,
+        }
+
+        let item = Item {
+            a: 42,
+            b: None,
+            c: String::new("foobar"),
+        }
+
+    Can write:
+        let item = ItemBuilder::new()
+            .a(42)
+            .c("foobar")
+            .build();
+
+    Some advanced uses of the builder pattern in Rust are to
+    implement a form of what is sometimes called the typestate pattern
 ***/
 
 macro_rules! myvec {
