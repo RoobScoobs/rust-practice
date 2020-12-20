@@ -111,6 +111,14 @@
     Moving the comma from inside the repetition to outside means
     to take it from a list of expressions each followed by a comma to
     a list of expressions separated by commas
+
+    EXPANDING A MACRO
+
+    In order to see what the macro expands into
+    to see if the generated code matches expectations
+    can use: cargo expand
+
+    Running the command from the root of the crate should show all macros expanded out
 ***/
 
 macro_rules! myvec {
