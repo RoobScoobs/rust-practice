@@ -119,6 +119,67 @@
     can use: cargo expand
 
     Running the command from the root of the crate should show all macros expanded out
+
+    MACROS BY EXAMPLE
+
+    https://doc.rust-lang.org/1.30.0/reference/macros-by-example.html
+
+    PROCEDURAL MACROS
+
+    As of Rust 1.30 this type of macro became available on the stable release
+
+    There are 3 types of procedular macros
+        - custom derive
+        - attribute-like
+        - function-like
+
+    CUSTOM DERIVE
+
+    It means that a trait like MyCoolTrait can be created and used in a way that maeks the following code work:
+        #[derive(MyCoolTrait)]
+        struct SomeStruct;
+
+    SomeStruct will implement MyCoolTrait automatically by having the implementation generated at compile time
+
+    This works by sending the syntax of the item the derive is placed on to some code
+    that returns new syntax which will be added to the source alongside the item
+
+    ATTRIBUTE-LIKE
+
+    Attributes are the annotations inside the syntax #[...]
+    
+    For example #[derive(Debug)] is an attribute
+    It is the derive attribute which takes arguments
+    
+    Unlike the custom derive macros which define the arguments to the derive attribute operator,
+    can instead create new attributes
+    
+    Example from the blog_actix web server was defining route information
+        #[get("/lookup/{index}")]
+        fn lookup(...){}
+
+    The get attribute is custom and is implemented via a procedural macro
+
+    This type of macro is a function that takes the arguments to the attribute
+    as raw syntax as well as the item it is being defined on as syntax
+    and then generates code
+
+    FUNCTION-LIKE
+
+    An example of the type may look like:
+        gen_object! {
+            class Foo: SomeThing {
+                x: u32,
+                y: RefCell<i16>,
+            }
+
+            impl Foo {
+                ...
+            }
+        }
+
+    This means that gen_object takes all of the subsequent syntax as input
+    and generates new code to replace it
 ***/
 
 macro_rules! myvec {
