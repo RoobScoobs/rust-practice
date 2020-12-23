@@ -121,7 +121,35 @@
     proc_macro::TokenStream so the expectation is to get proc_macro2::TokenStream values
     that simply need to call into on
 
+    FRIENDLY ERROR HANDLING
 
+    The to_compile_errors will handle the transformation of an error
+    into something that the procedural macro system can work with
+
+    Assumption is that the errors come as a vector of syn::Errors
+    which are the expected types of errors that will be encountered
+    i.e. mostly be running into syntax errors
+
+    One nice feature of syn is the associated function syn::Error::to_compile_error
+    which converts the error type into a diagnostic error which the compiler will understand
+    when returned as a token stream
+
+    The quote! macro uses a syntax similar to the macro_rules macro for generating code,
+    except it interpolates variables using the syntax #variable
+
+    This interpolation requires the variable to implement the ToTokens trait
+
+    In this case, the compile_errors are interpolated, however, this variable is an iterator
+    therefore, like in delcarative macros, the #(...)* syntax can be used to generate code for each
+    element in the compile_errors iterator
+
+    The output of the quote! macro is the interpolated syntax as proc_macro2::TokenStream
+
+    The error function expects a vector of errors
+    and in order to make the corresponding Result type easier to write
+    can declare a type alias called MultiResult
+
+    A struct called Syntax Errors is also defined to make working with a vector of errors a little easier
 ***/
 
 extern crate proc_macro;
@@ -130,6 +158,13 @@ use quote::quote;
 use std::fmt;
 use syn::parenthesized;
 use syn::parse::Result as SynResult;
+
+type MultiResult<T> = std::result::Result<T, Vec<syn::Error>>;
+
+#[derive(Debug, Default)]
+struct SyntaxErrors {
+    inner: Vec<syn::Error>,
+}
 
 #[proc_macro_derive(Builder, attributes(builder))]
 pub fn builder_derive(input: TokenStream) -> TokenStream {
@@ -144,3 +179,11 @@ fn impl_builder_macro(ty: syn::DeriveInput) -> TokenStream {
         Err(e) => to_compile_errors(e).into(),
     }
 }
+
+fn to_compile_errors(errors: Vec<syn::Error>) -> proc_macro2::TokenStream {
+    let compile_errors = errors.iter().map(syn::Error::to_compile_error);
+
+    quote! {
+        #(#compile_errors)*
+    }
+} 
