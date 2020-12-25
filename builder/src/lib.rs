@@ -149,7 +149,35 @@
     and in order to make the corresponding Result type easier to write
     can declare a type alias called MultiResult
 
-    A struct called Syntax Errors is also defined to make working with a vector of errors a little easier
+    SYNTAX ERRORS STRUCT
+
+    A struct called SyntaxErrors is also defined to make working with a vector of errors a little easier
+    by implementing helper methods on the struct
+
+    Create an add method which appends a single error to the vector
+
+    This uses generic types to accept anything that can be turned into tokens
+    along with anything that can be nicely printed as the description
+
+    The new_spanned function uses the token trees, tts,
+    input to capture source information to inform the compiler
+    where to draw errors when printing the error out
+
+    A span in the Rust compiler is effectively a region of source code
+    Each piece of syntax defines a span so able to bootstrap a span
+    if there are some input tokens
+
+    The goal is to inform the compiler as much as possible as to what syntax is causing the problem
+    and to describe how best to fix it
+
+    The worst case scenario is when the error just points at #[derive(Builder)]
+    and has some opaque message
+
+    The finish method consumes the wrapper struct to return a value of the MultiResult
+
+    The consequence of this is that the ? operator can be used after calling finish
+    to report as many errors as they are diagnosed
+
 ***/
 
 extern crate proc_macro;
@@ -164,6 +192,28 @@ type MultiResult<T> = std::result::Result<T, Vec<syn::Error>>;
 #[derive(Debug, Default)]
 struct SyntaxErrors {
     inner: Vec<syn::Error>,
+}
+
+impl SyntaxErrors {
+    fn add<D, T>(&mut self, tts: T, description: D)
+    where
+        D: fmt::Display,
+        T: quote::ToTokens
+    {
+        self.inner.push(syn::Error::new_spanned(tts, description));
+    }
+
+    fn extend(&mut self, errors: Vec<syn::Error>) {
+        self.inner.extend(errors);
+    }
+
+    fn finish(self) -> MultiResult<()> {
+        if self.inner.is_empty() {
+            Ok(())
+        } else {
+            Err(self.inner)
+        }
+    } 
 }
 
 #[proc_macro_derive(Builder, attributes(builder))]
@@ -186,4 +236,4 @@ fn to_compile_errors(errors: Vec<syn::Error>) -> proc_macro2::TokenStream {
     quote! {
         #(#compile_errors)*
     }
-} 
+}
