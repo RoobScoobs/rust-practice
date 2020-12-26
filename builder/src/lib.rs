@@ -178,8 +178,29 @@
     The consequence of this is that the ? operator can be used after calling finish
     to report as many errors as they are diagnosed
 
-***/
+    GETTING INTO THE PARSER
 
+    The next helper function is called parse_builder_information
+    which takes the syn input and returns a result with the builder code or a vector of errors
+
+    The first line brings the Spanned trait into scope,
+    so the span method can be called on the input
+
+    The syn::DeriveInput type is destructured into the specific constituent parts that are essential
+
+    Specifically, the data field is matched against the syn::Data enum to see if the item is a struct
+
+    The entire purpose of the function is to ensure that a struct is being derived
+    and not an enum or any other possible item
+
+    If a struct is not being derived on, then an error is created and it stops there
+
+    Otherwise, the pieces of data gathered are passed to yet another helper function
+    called parse_builder_struct
+    
+    
+***/
+    
 extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
@@ -235,5 +256,27 @@ fn to_compile_errors(errors: Vec<syn::Error>) -> proc_macro2::TokenStream {
 
     quote! {
         #(#compile_errors)*
+    }
+}
+
+fn parse_builder_information(ty: syn::DeriveInput) -> MultiResult<BuilderInfo> {
+    use syn::spanned::Spanned;
+    use syn::Data;
+
+    let span = ty.span();
+    let syn::DeriveInput {
+        ident,
+        generics,
+        data,
+        attrs,
+        ..
+    } = ty;
+
+    match data {
+        Data::Struct(struct_) => parse_builder_struct(struct_, ident, generics, attrs, span),
+        _ => Err(vec![syn::Error::new(
+            span,
+            "Can only derive `Builder` for a struct",
+        )]),
     }
 }
