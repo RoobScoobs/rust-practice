@@ -198,7 +198,49 @@
     Otherwise, the pieces of data gathered are passed to yet another helper function
     called parse_builder_struct
     
+    THE BuilderInfo TYPE
+
+    The name, generics, and vector of fields are all the information needed from the parsed AST
+    to be able to generate the desired code
+
+    As an example consider:
+        #[derive(Builder)]
+        struct Item<T, U>
+        where
+            T: Default
+        {
+            a: u32,
+            b: T,
+            #[builder(required)]
+            c: U
+        }
+
+    Here name is Item, the generics field captures <T,U> where T: Default,
+    and fields contains a: u32, b: T, and #[builder(required)] c: U
+
+    Each of those are wrapped in a suitable data structure that both captures this syntax
+    as well as the information about where it lives in the source code
+
+    The fields vector contains a tuple of identifier, type, and attributes
+    so for example a: u32 would be something like (Some(a), u32, vec![])
+
+    HANDLING ATTRIBUTES
+
+    The BuilderAttribute is an enum defining all the attributes supported
     
+    There's only one supported variant, and it will capture the attribute: #[builder(required)]
+
+    The meaning of this attribute is to specify that a field must be set as part of the build process,
+    and therefore a default value should not be used
+
+    For fields not marked required,
+    the assumption is that the type of the field implements the Default trait
+
+    The struct BuilderAttributesBody will be a collection of BuilderAttributes,
+    which allow for the handling of a list of attributes
+
+    Implementing the Parse trait from syn for the struct will enable bringing in custom logic
+    into the work syn already does
 ***/
     
 extern crate proc_macro;
@@ -210,10 +252,22 @@ use syn::parse::Result as SynResult;
 
 type MultiResult<T> = std::result::Result<T, Vec<syn::Error>>;
 
+enum BuilderAttribute {
+    Required(proc_macro2::TokenStream),
+}
+
 #[derive(Debug, Default)]
 struct SyntaxErrors {
     inner: Vec<syn::Error>,
 }
+
+struct BuilderInfo {
+    name: syn::Ident,
+    generics: syn::Generics,
+    fields: Vec<(Option<syn::Ident>, syn::Type, Vec<BuilderAttribute>)>,
+}
+
+struct BuilderAttributeBody(Vec<BuilderAttribute>);
 
 impl SyntaxErrors {
     fn add<D, T>(&mut self, tts: T, description: D)
