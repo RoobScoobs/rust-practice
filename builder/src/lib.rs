@@ -268,6 +268,24 @@
     and for each of these can call into_value to get the BuilderAttribute out
 
     Finally, collect is called on the iterator to turn it into the vector that the return type expects
+
+    Now turning to the Parse trait for BuilderAttribute,
+    the aim is to check if the attribute is literally required,
+    if so then a success is returned, otherwise a failure is declared
+    
+    Methods from syn are called to turn the input into an Ident
+    which is the only thing expected
+
+    If this step fails then an error is returned because of the ? operator
+
+    Then this Ident is compared to "required"
+    If there's a match, wrap the input token stream inside the enum variant
+
+    Otherwise using the location of the Ident that is parsed an error is generated saying that there was something unexpected
+
+    FROM syn::Attributes TO THE DESIRED TYPE
+
+
 ***/
     
 extern crate proc_macro;
@@ -332,6 +350,24 @@ impl syn::parse::Parse for BuilderAttributeBody {
         Ok(BuilderAttributeBody(
             list.into_pairs().map(|p| p.into_value()).collect(),
         ))
+    }
+}
+
+impl syn::parse::Parse for BuilderAttribute {
+    fn parse(input: syn::parse::ParseStream) -> SynResult<Self> {
+        use syn::Ident;
+
+        let input_tts = input.cursor().token_stream();
+        let name: Ident = input.parse()?;
+
+        if name == "required" {
+            Ok(BuilderAttribute::Required(input_tts))
+        } else {
+            Err(syn::Error::new(
+                name.span(),
+                "expected `required`",
+            ))
+        }
     }
 }
 
