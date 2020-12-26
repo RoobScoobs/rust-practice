@@ -241,6 +241,33 @@
 
     Implementing the Parse trait from syn for the struct will enable bringing in custom logic
     into the work syn already does
+
+    The purpose of the implementation of parse is to remove the parentheses from #[builder(...)]
+    so that BuilderAttribute only has to deal with the tokens inside
+
+    It also deals with the logic of a comma separated list here
+
+    The parenthesized!(inside in input) means to take the ParseStream in input,
+    remove the parentheses from the outside and the store the inner tokens in inside
+
+    This is a macro defined in syn for this very common scenario
+    There are similar parser macros for removing curly braces (braced!) and square brackets (bracketed!)
+
+    The next step is to parse a sequence of BuilderAttribute types separated by commas allowing an optional trailing comma
+
+    The Punctuated<T, P> type is used to handle this very common case of a list of T separated by P
+    
+    The parse_terminated allows for trailing punctuation
+    If there's no need to accept a trailing punctuation, then parse_separated_nonempty can be used
+
+    The final work that needs to be done is to extract the BuilderAttribute types from the punctuated list
+
+    The into_pairs method on Punctuated can accomplish that
+    
+    It returns an iterator of Pair<BuilderAttribute, Comma>
+    and for each of these can call into_value to get the BuilderAttribute out
+
+    Finally, collect is called on the iterator to turn it into the vector that the return type expects
 ***/
     
 extern crate proc_macro;
@@ -289,6 +316,23 @@ impl SyntaxErrors {
             Err(self.inner)
         }
     } 
+}
+
+impl syn::parse::Parse for BuilderAttributeBody {
+    fn parse(input: syn::parse::ParseStream) -> SynResult<Self> {
+        use syn::punctuated::Punctuated;
+        use syn::token::Comma;
+
+        let inside;
+        parenthesized!(inside in input);
+
+        let parse_comma_list = Punctuated::<BuilderAttribute, Comma>::parse_terminated;
+        let list = parse_comma_list(&inside)?;
+
+        Ok(BuilderAttributeBody(
+            list.into_pairs().map(|p| p.into_value()).collect(),
+        ))
+    }
 }
 
 #[proc_macro_derive(Builder, attributes(builder))]
