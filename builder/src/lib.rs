@@ -285,7 +285,41 @@
 
     FROM syn::Attributes TO THE DESIRED TYPE
 
+    A vector of attributes and vector of errors are defined and only one will be returned
 
+    The Iterator trait has many useful methods, filter_map
+    which is used here to both map over an iterator and remove some unwanted items at the same time
+    
+    The closure passed to filter_map returns an Option<T>
+
+    The resulting iterator will "unwrap" the values that are Some(T) to just be T
+    and will not include the None values
+
+    The attributes that are passed as input - ignoring the ones that are not the builder attribute -
+    are parsed into the specialized types
+    
+    The parse2 function is for parsing proc_macro2 types but is otherwise the same as parse for proc_macro types
+
+    Suppose there is: 
+        #[something(else), builder(required)]
+
+    The iteration would run through something(else) and builder(required)
+    
+    The first thing seen is an attr.path of something which is not builder
+    so None is returned for that attribute which effectively excludes it from the parsed_attrs result
+
+    The next thing seen has a path that matches builder so the tokens of the attribute,
+    which is (required) are parsed into a BuilderAttributeBody, which relies on the Parse trait implementation
+
+    Once that is parsed map(|body| body.0) is called because the Parse trait returns a Result,
+    so have to deal with getting inside the Ok variant to pull the Vec<BuilderAttribute> out of the tuple struct wrapper that's put around it
+
+    It's worth mentioning that implementing Parse on Vec<BuilderAttribute> cannot happen as Vec nor Parse is owned by us
+
+    Rust trait implementation rules require that either the trait or the type is owned
+    (where ownership means it is defined within the crate with the trail implementation)
+
+    However, this file does own BuilderAttributeBody(Vec<BuilderAttribute>) thus Parse can be implemented on the tuple struct
 ***/
     
 extern crate proc_macro;
@@ -412,5 +446,33 @@ fn parse_builder_information(ty: syn::DeriveInput) -> MultiResult<BuilderInfo> {
             span,
             "Can only derive `Builder` for a struct",
         )]),
+    }
+}
+
+fn attributes_from_syn(attrs: Vec<syn::Attribute>) -> MultiResult<Vec<BuilderAttribute>> {
+    use syn::parse2;
+
+    let mut ours = Vec::new();
+    let mut errs = Vec::new();
+
+    let parsed_attrs = attrs.into_iter().filter_map(|attr| {
+        if attr.path.is_ident("builder") {
+            Some(parse2::<BuilderAttributeBody>(attr.tokens).map(|body| body.0))
+        } else {
+            None
+        }
+    });
+
+    for attr in parsed_attrs {
+        match attr {
+            Ok(v) => ours.extend(v),
+            Err(e) => errs.push(e),
+        }
+    }
+
+    if errs.is_empty() {
+        Ok(ours)
+    } else {
+        Err(errs)
     }
 }
