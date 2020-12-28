@@ -320,6 +320,44 @@
     (where ownership means it is defined within the crate with the trail implementation)
 
     However, this file does own BuilderAttributeBody(Vec<BuilderAttribute>) thus Parse can be implemented on the tuple struct
+
+    FINISHING UP THE PARSING
+
+    The purpose of the parse_builder_struct is to deal with all the various error cases that might occur
+    so that in the end if there's a BuilderInfo struct everything is legit for doing code generation
+
+    There's already assurance that we're getting derived on a struct so there's a syn::DataStruct type to work with
+
+    The rest of the input was pulled out of the parsed input
+    because it is the only things needed to eventually define a BuilderInfo struct
+
+    First step is to check the attributes defined on the struct itself to see if a builder attribute was used
+
+    There's no support for #[builder(required)] on the entire struct
+    so an error is added to the collection of errors if one is seen
+
+    The next step is to get a handle on the fields defined on the struct
+
+    There's no support on the type of struct that has unnamed struct fields
+    if for example there's a tuple struct defined such as: 
+        struct Foo(String)
+    which has one unnamed field
+
+    Therefore, named fields are specifically looked for and its inner data is pulled out
+    otherwise an error is added and then all the errors gathered so far are returned
+
+    For each of the named fields, the identifier, type and attributse need to be extracted
+
+    This is done by iterating over the fields
+    and then using methods on the field type to get the information wanted
+
+    The attributes_from_syn is used to extract attribute information
+
+    Attributes are looked at for every field,
+    so there's the potential to accumulate multiple errors depending on the input
+
+    Finally, errors are returned if encountered,
+    or return a successful result containing the BuilderInfo struct 
 ***/
     
 extern crate proc_macro;
@@ -445,8 +483,62 @@ fn parse_builder_information(ty: syn::DeriveInput) -> MultiResult<BuilderInfo> {
         _ => Err(vec![syn::Error::new(
             span,
             "Can only derive `Builder` for a struct",
-        )]),
+        )])
     }
+}
+
+fn parse_builder_struct(
+    struct_: syn::DataStruct,
+    name: syn::Ident,
+    generics: syn::Generics,
+    attrs: Vec<syn::Attribute>,
+    span: proc_macro2::Span
+) -> MultiResult<BuilderInfo> {
+    use syn::Fields;
+
+    let mut errors = SyntaxErrors::default();
+
+    for attr in attributes_from_syn(attrs)? {
+        match attr {
+            BuilderAttribute::Required(tts) => {
+                errors.add(tts, "required is only valid on a field");
+            }
+        }
+    }
+
+    let fields = match struct_.fields {
+        Fields::Named(fields) => fields,
+        _ => {
+            errors.extend(vec![syn::Error::new(
+                span,
+                "only named fields are supported"
+            )]);
+
+            return Err(errors
+                .finish()
+                .expect_err("just added an error so there should one"));
+        }
+    };
+
+    let fields = fields
+        .named
+        .into_iter()
+        .map(|f| match attributes_from_syn(f.attrs) {
+            Ok(attrs) => (f.ident, f.ty, attrs),
+            Err(e) => {
+                errors.extend(e);
+                (f.ident, f.ty, vec![])
+            }
+        })
+        .collect();
+
+    errors.finish()?;
+
+    Ok(BuilderInfo {
+        name,
+        generics,
+        fields,
+    })
 }
 
 fn attributes_from_syn(attrs: Vec<syn::Attribute>) -> MultiResult<Vec<BuilderAttribute>> {
