@@ -357,7 +357,41 @@
     so there's the potential to accumulate multiple errors depending on the input
 
     Finally, errors are returned if encountered,
-    or return a successful result containing the BuilderInfo struct 
+    or return a successful result containing the BuilderInfo struct
+
+    GENERATING CODE
+
+    First step is to get an implementation of Into<TokenStream> for BuilderInfo
+
+    It can be useful to keep trait implementations slim
+    and keep the logic that really works with the iternals of the struct
+    inside an impl block for the struct itself
+
+    The impl block for BuilderInfo has the generate_builder to consume the struct
+    to return a proc_macro2::TokenStream
+
+    There is nothing else happening after the function so no reason to not consume self here
+
+    For each field there is a function created that can be used to set the value for that field
+
+    The quote! macro allows for interpolating variables in scope with #variable
+    
+    If there's a field like field_name: U, then the quote! macro according to how it's used here will create the following code:
+
+        fn field_name(__Builder_T: Into<U>>(mut self, val: __Builder_T)) -> Self {
+            self.field_name = Some(val.into());
+            self
+        }
+    
+    The weird thing here is that __Builder_T is created as an identifier
+    which is used as the generic type variable
+
+    This gets into the concept of macro hygiene
+
+    The basic problem to work around is suppose T was used as the type variable
+    but T was already defined to be something in the surrounding code
+
+    
 ***/
     
 extern crate proc_macro;
@@ -440,6 +474,27 @@ impl syn::parse::Parse for BuilderAttribute {
                 "expected `required`",
             ))
         }
+    }
+}
+
+impl From<BuilderInfo> for TokenStream {
+    fn from(other: BuilderInfo) -> TokenStream {
+        other.generate_builder().into()
+    }
+}
+
+impl BuilderInfo {
+    fn generate_builder(self) -> proc_macro2::TokenStream {
+        let gen_typ = syn::Ident::new("__Builder_T", proc_macro2::Span::call_site());
+
+        let setters = self.fields.iter().map(|(n, t, _)| {
+            quote! {
+                fn #n<#gen_typ: Into<#t>>(mut self, val: #gen_typ) -> Self {
+                    sef.#n = Some(val.into());
+                    self
+                }
+            }
+        })
     }
 }
 
