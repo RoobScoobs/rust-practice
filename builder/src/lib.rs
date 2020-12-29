@@ -585,7 +585,7 @@ impl BuilderInfo {
         let setters = self.fields.iter().map(|(n, t, _)| {
             quote! {
                 fn #n<#gen_typ: Into<#t>>(mut self, val: #gen_typ) -> Self {
-                    sef.#n = Some(val.into());
+                    self.#n = Some(val.into());
                     self
                 }
             }
