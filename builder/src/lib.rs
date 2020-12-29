@@ -391,6 +391,101 @@
     The basic problem to work around is suppose T was used as the type variable
     but T was already defined to be something in the surrounding code
 
+    One type of hygiene would allow that
+    and would treat those two T types as different
+    because they were created in different contexts
+
+    A different type of hygiene makes identifiers that are created be the same
+    as if they were part of the source where the macro is called -- this is somtimes called unhygienic
+
+    This means the created identifiers can be used by regular code;
+    however, this also means they can accidentally conflict
+
+    It's important to specify the type of hygiene opting into
+    when creating an identifier by passing a syn::Span to the constructor of an identifier
+    
+    The call_site hygiene is the type that would otherwise conflict with an existing name;
+    ergo the use of __Builder_T as it is highly unlikely this will conflict with an existing type
+
+    The next thing is to create the fields on the builder struct itself
+
+    The builder struct holds the state as the data is building is in the process of being built up
+    
+    This is implemented by having an optional field for each field in the target struct
+
+    That is, if there's a struct:
+
+        #[derive(Builder)]
+        struct Item {
+            a: u32,
+            b: String,
+        }
+
+    then the builder struct will be like:
+
+        struct ItemBuilder {
+            a: Option<u32>,
+            b: Option<String>,
+        }
+
+    The next thing is to build a default field for each field,
+    and in this case they are set to None
+
+    This will be used to implement Default for the builder struct
+
+    Assumption is that the attribute vector will either be empty or have one element
+
+    If it has one element then the field is required, otherwise it might never be set
+
+    In the case that it is not required Default::default is used to fill in the value
+
+    Therefore, if a field does not implement Default it must be marked required
+
+    Using unwrap on the option for required field
+    which will cause a runtime panic if build is called when a required field is not set
+
+    For example, this code takes a field such as a: u32 and generates:
+        a: self.a.unwrap(),
+
+    Next, take the name which is the identifier of the struct, that is for
+        
+        #[derive(Builder)]
+            struct Item {
+                ...
+            }
+
+    the name is Item and an identifier ItemBuilder is constructed,
+    which has hygiene as if it was in the same context as where Item is defined
+
+    This is so that code using Item can use ItemBuilder as if it was hand-written in the same place
+
+    The function split_for_impl on the generics type is defined exactly
+    to provide the pieces of the generic information needed to iterpolate as code is generated
+
+    The generics defined on a struct need to be put in different places
+    when a trait is defined for that struct
+
+    The first part of this quote macro code adds an impl block for the struct
+    which defines a function builder that returns an instance of our builder
+
+    If the struct already has a builder method then this will be a compile error
+
+    This is one of the nice things in Rust -- being able to define multiple impl blocks for the same item
+
+    The next part of the code implements Default for the builder
+    
+    It does this by creating a struct literal
+    by interpolating the iterator of fields defined by builder_defaults
+    using the #(...)* syntax
+
+    Then the struct is created again using the repetition syntax #(builder_fields)*
+    to interpolate the fields defined earlier into the struct definition
+
+    Finally, an impl block is created for the builder struct
+    which defines new to return Default::default, iterpolates all of the setter functions,
+    and then defines a build function which consumes the builder
+    and constructs an instance of the struct that is being built
+
     
 ***/
     
@@ -494,7 +589,69 @@ impl BuilderInfo {
                     self
                 }
             }
-        })
+        });
+
+        let builder_fields = self.fields.iter().map(|(n, t, _)| {
+            quote! {
+                #n: Option<#t>,
+            }
+        });
+
+        let builder_defaults = self.fields.iter().map(|(n, _, _)| {
+            quote! {
+                #n: None,
+            }
+        });
+
+        let builder_build = self.fields.iter().map(|(n, _t, a)| {
+            if a.is_empty() {
+                quote! {
+                    #n: self.#n.unwrap_or_else(Default::default),
+                }
+            } else {
+                quote! {
+                    #n: self.#n.unwrap(),
+                }
+            }
+        });
+
+        let name = self.name;
+        let (impl_generics, ty_generics, maybe_where) = self.generics.split_for_impl();
+        let builder_name = syn::Ident::new(&format!("{}Builder", name), name.span());
+
+        quote! {
+            impl #impl_generics #name #ty_generics #maybe_where {
+                fn builder() -> #builder_name #ty_generics {
+                    #builder_name::new()
+                }
+            }
+
+            impl #impl_generics Default for #builder_name #ty_generics #maybe_where {
+                fn default() -> Self {
+                    #builder_name {
+                        #(#builder_defaults)*
+                    }
+                }
+            }
+
+            struct #builder_name #ty_generics #maybe_where {
+                #(#builder_fields)*
+            }
+
+            impl #impl_generics #builder_name #ty_generics #maybe_where {
+                fn new() -> Self {
+                    Default::default()
+                }
+
+                #(#setters)*
+
+                fn build(self) -> #name #ty_generics {
+                    #name {
+                        #(#builder_build)*
+                    }
+                }
+            }
+        }
     }
 }
 
